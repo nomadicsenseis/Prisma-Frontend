@@ -1,0 +1,50 @@
+=== DATABASE SCHEMA ===
+
+Labels found: ['Articulo', 'Autor', 'Periodico', 'Topic', 'Fecha']
+
+
+--- Sample 'Articulo' node ---
+{
+  "contenido": "Israel y las milicias de Gaza han entrado en pocas horas en una guerra abierta después de que los grupos armados de la Franja lanzasen a primera hora de este sábado un ataque sorpresa sin precedentes, con la infiltración de decenas de hombres armados, secuestros de civiles y soldados y una intensa descarga de cohetes (2.500, según un portavoz militar israelí, hasta 5.000, según Hamás) que ha causado ya al menos 100 muertos y cientos de heridos. Se trata de una operación inédita, no solo por su alcance y simbolismo, sino también por su carácter combinado y por el número de hombres armados que ha logrado penetrar en territorio israelí. Circulan, además, imágenes de decenas de secuestros, que Hamás reivindica e Israel ha confirmado a media tarde. Pasado el shock inicial, el Ejército israelí ha bombardeado masivamente la Franja, causando en pocas horas 198 muertos, según el Ministerio de Sanidad de Gaza. “Ciudadanos de Israel, estamos en guerra. Y la ganaremos”, ha asegurado el primer ministro, Benjamín Netanyahu. Las Fuerzas Armadas han declarado el estado de preparación para la guerra y movilizado a miles de reservistas.\n\nEn la madrugada de este sábado, con el país a medio gas por coincidir la jornada del sabbat y el final de la festividad judía de Sucot, decenas de milicianos palestinos han logrado cruzar la ultraprotegida frontera por aire, mar y tierra, según un portavoz militar israelí. Luego han mantenido tiroteos con soldados israelíes en localidades cercanas a la Franja. Vídeos difundidos en redes sociales muestran además el aparente secuestro de israelíes, algunos posiblemente sin vida. También cómo varias mujeres y un hombre son supuestamente trasladados a Gaza por los milicianos desde el kibutz de Kfar Aza, cerca de la Franja. El de los secuestros es un tema particularmente sensible en el país (donde el servicio militar es obligatorio). En el pasado ha desencadenado operaciones a gran escala y motivado canjes por presos palestinos.\n\nLas alarmas que alertan del lanzamiento de proyectiles suenan una detrás de otra desde la madrugada, incluido en lugares donde solo sucede en los mayores repuntes de tensión, como Tel Aviv o Jerusalén. Los heridos superan los 900, según los servicios sanitarios. Es la escalada de violencia más grave en la zona desde la guerra que libraron Hamás y el Estado judío en 2021 y en la que murieron unos 230 palestinos y 13 israelíes. El balance de este sábado es ya similar a aquel en 11 días de enfrentamientos.\n\nLas autoridades israelíes han pedido a la población en general que se mantenga cerca de refugios y, en concreto, a los residentes en las localidades cerca de la Franja que no salgan de sus casas. La Policía habla de “21 escenas activas” de enfrentamientos entre sus agentes y hombres armados palestinos. En las redes circulan vídeos de milicianos sobre vehículos aparentemente introducidos desde la Franja por una barrera habitualmente hipervigilada. Hasta un periodista palestino ha cruzado e informa desde el lugar entre sonidos de disparos, en una imagen impensable 24 horas antes. El domingo comienza la semana en Israel y las autoridades han cancelado las clases para un millón de niños, aproximadamente.\n\nEl ministro de Defensa, Yoav Gallant, ha comparecido a media mañana. “Hamás ha cometido un grave error y lanzado una guerra contra el Estado de Israel. Las tropas del Ejército israelí están peleando contra el enemigo en cualquier lugar. Pido a todos los ciudadanos de Israel que sigan las instrucciones de seguridad. El Estado de Israel ganará esta guerra”, ha dicho. Poco después, decenas de cazabombarderos han empezado a bombardear Gaza, controlada por Hamás desde 2007, según ha anunciado el Ejército, que ha puesto nombre a la operación: Espadas de Hierro.\n\nNetanyahu, por su parte, ha señalado que los objetivos de la respuesta israelí son “limpiar la zona de las fuerzas enemigas infiltradas y restaurar la seguridad y la paz en los asentamientos atacados”, además de “cobrar un enorme precio al enemigo, también en la franja de Gaza” y “fortalecer otros escenarios para que nadie cometa el error de unirse a esta guerra”.\n\nMohammed Deif, el líder del brazo armado de Hamás, las Brigadas de Ezedín Al Qasam, ha defendido en un vídeo la operación como una respuesta a los “crímenes de la ocupación”, los “ataques” a la Explanada de las Mezquitas de Jerusalén, habitual foco de tensión, y el endurecimiento de la situación de los presos palestinos. “Es más grande de lo que la ocupación [Israel] piensa”, ha señalado, al bautizar la operación como Diluvio de Al Aqsa, en referencia al nombre de la mezquita por la que los palestinos denominan normalmente a todo el recinto. La Yihad Islámica ―una milicia menor, pero particularmente combativa― ha precisado que también está participando y se ha atribuido varios de los secuestros.\n\nLas Brigadas de Ezedín Al Qasam afirman haber tomado el control de Erez ―el único paso fronterizo de pasajeros entre los dos territorios― y liberado a prisioneros palestinos en la cárcel israelí de Ashkelón. En vídeos difundidos de la zona, se ve a palestinos circulando en vehículos militares incautados supuestamente a israelíes. En una intervención televisada, el portavoz militar de Hamás Abu Obeida ha declarado que “el enemigo aún no conoce los resultados de esta batalla” y se ha visto golpeado por el ataque “sorpresa”.\n\nEl presidente de la Autoridad Palestina, Mahmud Abbas, enfrentado a Hamás, ha enfatizado el derecho de su pueblo a defenderse del “terrorismo y las fuerzas de ocupación” y la “necesidad de brindarle protección”. Presidirá una reunión de emergencia en la ciudad cisjordana de Ramala.\n\nEn previsión de los bombardeos, el Ministerio de Educación de Gaza ya había anunciado en las horas previas la cancelación de todas las clases escolares. Cientos de residentes en la zona fronteriza (por la que suelen penetrar las tropas israelíes en caso de invasión terrestre) se habían ido desplazando hacia el interior y otros habitantes de la Franja se habían apresurado a comprar comida y otros suministros, ante el horizonte de días de conflicto.\n\nEl ataque lanzado por Hamás también ha desencadenado un aluvión de reacciones internacionales de gobiernos e instituciones. Un portavoz de Seguridad Nacional de la Casa Blanca ha expresado “la condena inequívoca” de Estados Unidos por el ataque, según informó la CNN. La Unión Europea empleó las mismas palabras para condenar “inequívocamente” la agresión y expresar su “solidaridad con Israel”. También el alto representante de Exteriores de la UE, Josep Borrell, se ha pronunciado: “Esta horrible violencia debe cesar inmediatamente. La UE expresa su solidaridad con Israel en estos tiempos difíciles”. Entre otros mandatarios, el presidente en funciones del Gobierno español, Pedro Sánchez, ha rechazado el “ataque terrorista contra Israel”.\n\nEgipto, uno de los mediadores tradicionales en el conflicto entre palestinos e israelíes, ha anunciado que mantiene “contactos intensos” para detener la escalada. Por su parte, el partido milicia chií Hezbolá, ha apoyado desde Líbano a Hamás ante lo que califica de “continuos crímenes de la ocupación”. También lo ha hecho Irán, según un asesor del líder supremo, Alí Jamenei.\n\nSigue toda la información internacional en Facebook y X, o en nuestra newsletter semanal.\n\nCorresponsal para Oriente Próximo, tras cubrir la información de los Balcanes en la sección de Internacional en Madrid. De vuelta a Jerusalén, donde ya trabajó durante siete años (2007-2013) para la Agencia Efe. Licenciado en Periodismo y Máster de Relaciones Internacionales y Comunicación por la Universidad Complutense de Madrid.",
+  "num_palabras": 1227,
+  "confidence": 0.0,
+  "titulo": "Gaza e Israel entran en guerra tras un ataque sin precedentes desde la Franja",
+  "topic": "unknown",
+  "id": "el_país_2023-10-07_49622273",
+  "url": "https://web.archive.org/web/20231007122731/https://elpais.com/internacional/2023-10-07/las-milicias-de-gaza-lanzan-un-ataque-sorpresa-contra-israel-sin-precedentes.html",
+  "fecha_publicacion": "2023-10-07T17:11:22+02:00"
+}
+Total Articulo nodes: 48280
+
+--- Sample 'Autor' node ---
+{
+  "num_articulos": 3,
+  "id": "autor_-",
+  "nombre": "-"
+}
+Total Autor nodes: 4921
+
+--- Sample 'Periodico' node ---
+{
+  "num_articulos": 64688,
+  "id": "periodico_el_país",
+  "nombre": "El País"
+}
+Total Periodico nodes: 1
+
+--- Sample 'Topic' node ---
+{
+  "id": "topic_franja_gaza",
+  "nombre": "Franja Gaza"
+}
+Total Topic nodes: 21376
+
+--- Sample 'Fecha' node ---
+{
+  "fecha": "2023-10-07",
+  "mes": 10,
+  "id": "fecha_2023-10-07",
+  "anio": 2023,
+  "dia_semana": "Saturday"
+}
+Total Fecha nodes: 122
