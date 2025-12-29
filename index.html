@@ -12,12 +12,136 @@
     <script src="./vendor/lucide.min.js"></script>
 
     <!-- External Styles -->
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./styles.css?v=103">
 </head>
 
 <body>
     <!-- Globe Container -->
     <div id="globeViz"></div>
+
+    <!-- Timeline View (Full Screen Impact) -->
+    <div id="timelineSection" class="timeline-full-view" style="display: none;">
+        <div class="timeline-overlay"></div>
+        <div class="timeline-ui-top">
+            <div class="timeline-title-container">
+                <span class="timeline-tag">CRÓNICA VISUAL</span>
+                <h2>Línea de Tiempo de Eventos</h2>
+            </div>
+            <div class="timeline-controls">
+                <div class="control-group">
+                    <label for="macroSelect">Evento Macro</label>
+                    <select id="macroSelect">
+                        <option value="">Selecciona un proceso...</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="timelineZoom">Zoom Línea</label>
+                    <input type="range" id="timelineZoom" min="100" max="600" value="300" step="50">
+                </div>
+            </div>
+        </div>
+        <div class="timeline-track-container">
+            <div id="timelineList" class="timeline-horizontal-track">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Prisma 3D View - Phone Simulator Mode -->
+    <div id="prismaSection" class="prisma-full-view" style="display: none;">
+        <!-- Phone device frame (simulator) -->
+        <div class="phone-simulator">
+            <div class="phone-device">
+                <!-- Phone notch/Dynamic Island -->
+                <div class="phone-notch"></div>
+                <!-- Phone screen area -->
+                <div class="phone-screen">
+                    <div class="prisma-viewport">
+                        <!-- Navigation arrows -->
+                        <button class="prisma-nav prisma-nav-left" id="prismaNavLeft">
+                            <i data-lucide="chevron-left"></i>
+                        </button>
+                        <button class="prisma-nav prisma-nav-right" id="prismaNavRight">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+
+                        <!-- Face indicator -->
+                        <div class="prisma-face-indicator">
+                            <span class="face-dot active" data-face="0"></span>
+                            <span class="face-dot" data-face="1"></span>
+                            <span class="face-dot" data-face="2"></span>
+                        </div>
+
+                        <!-- The 3D Prisma -->
+                        <div class="prisma-container">
+                            <div class="prisma" id="prisma3d">
+                                <!-- Face 0: Article Comparison (Left) -->
+                                <div class="prisma-face face-comparison" data-face="0">
+                                    <div class="face-header-fixed">
+                                        <span class="face-tag">COMPARATIVA DE MEDIOS</span>
+                                        <h2 id="comparisonTitle">Selecciona un evento</h2>
+                                    </div>
+                                    <div class="comparison-columns">
+                                        <div class="comparison-col" id="prismaColPais">
+                                            <div class="col-header">
+                                                <img src="./img/el_pais_icon.jpg" alt="El País"
+                                                    style="filter: none !important; height: 35px; width: auto; border-radius: 4px;">
+                                            </div>
+                                            <div class="col-articles"></div>
+                                        </div>
+                                        <div class="comparison-col" id="prismaColMundo">
+                                            <div class="col-header">
+                                                <img src="./img/el_mundo_icon.png" alt="El Mundo"
+                                                    style="filter: none !important; height: 35px; width: auto; border-radius: 4px;">
+                                            </div>
+                                            <div class="col-articles"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Face 1: Events Feed (Center/Main) -->
+                                <div class="prisma-face face-events" data-face="1">
+                                    <div class="face-header-fixed">
+                                        <span class="face-tag">EVENTOS DEL DÍA</span>
+                                        <h2 id="currentEventTitle">Cargando...</h2>
+                                        <p id="currentEventDate" class="face-subtitle"></p>
+                                    </div>
+
+                                    <!-- Mini Globe for contextual location -->
+                                    <div id="miniGlobeContainer" class="mini-globe-wrapper">
+                                        <div id="miniGlobe"></div>
+                                    </div>
+
+                                    <div class="events-scroll-container" id="eventsContainer">
+                                        <!-- Events loaded by JS -->
+                                    </div>
+                                    <div class="face-hint">
+                                        <i data-lucide="arrow-down"></i> Desliza para más eventos
+                                    </div>
+                                </div>
+
+                                <!-- Face 2: Macro Timeline (Right) -->
+                                <div class="prisma-face face-timeline" data-face="2">
+                                    <div class="face-header-fixed">
+                                        <span class="face-tag">LÍNEA TEMPORAL</span>
+                                        <h2 id="timelineMacroTitle">Macroevento</h2>
+                                    </div>
+                                    <div class="vertical-timeline" id="verticalTimeline">
+                                        <!-- Timeline events loaded by JS -->
+                                    </div>
+                                    <div class="face-hint">
+                                        <i data-lucide="arrow-up"></i> Futuro · <i data-lucide="arrow-down"></i> Pasado
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Home indicator bar -->
+                <div class="phone-home-bar"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Left Panel -->
     <div class="panel left-panel">
@@ -25,6 +149,12 @@
             <h1>Prisma Aletheia</h1>
             <div class="subtitle">Noticias de España</div>
         </div>
+
+        <nav class="main-nav">
+            <button id="viewGlobe" class="nav-btn active"><i data-lucide="globe"></i> Globo</button>
+            <button id="viewTimeline" class="nav-btn"><i data-lucide="clock"></i> Timeline</button>
+            <button id="viewPrisma" class="nav-btn"><i data-lucide="box"></i> Prisma</button>
+        </nav>
 
         <!-- Calendar -->
         <div class="calendar-container">
@@ -69,9 +199,6 @@
             <ul id="topNews">
                 <!-- Populated by JS -->
             </ul>
-        </div>
-
-        <div class="footer-links">
             <a href="#">Sobre nosotros</a>
             <a href="#">Fuentes</a>
         </div>
@@ -88,6 +215,30 @@
         </div>
         <div class="reader-content" id="readerContent">
             <!-- Content injected here -->
+        </div>
+    </div>
+
+    <!-- Article Comparison Panel (New) -->
+    <div class="comparison-panel" id="comparisonPanel">
+        <div class="comparison-header">
+            <div class="comparison-info">
+                <span class="comparison-tag">Comparativa de Medios</span>
+                <h2 id="comparisonEventTitle">Nombre del Hecho</h2>
+                <div id="comparisonEventDate" class="comparison-date">Fecha</div>
+            </div>
+            <button class="comparison-close" onclick="closeComparison()"><i data-lucide="x"></i></button>
+        </div>
+        <div class="comparison-body">
+            <div class="comparison-column" id="colElPais">
+                <div class="column-header"><img src="./img/el_pais_icon.jpg" alt="El País"
+                        style="filter: none !important; height: 30px; width: auto; border-radius: 4px;"></div>
+                <div class="column-content"></div>
+            </div>
+            <div class="comparison-column" id="colElMundo">
+                <div class="column-header"><img src="./img/el_mundo_icon.png" alt="El Mundo"
+                        style="filter: none !important; height: 30px; width: auto; border-radius: 4px;"></div>
+                <div class="column-content"></div>
+            </div>
         </div>
     </div>
 
@@ -117,7 +268,7 @@
         </div>
     </div>
 
-    <script src="./script.js?v=2"></script>
+    <script src="./script.js?v=9"></script>
 </body>
 
 </html>

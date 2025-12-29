@@ -4,6 +4,18 @@ let world;
 let availableDates = [];
 let currentDateIndex = 0;
 let selectedTopic = ""; // empty means all topics
+let miniGlobeViz = null;
+
+// Prisma state
+// Prisma state
+let prismaHechos = [];
+let currentPrismaFace = 0;
+let currentHechoIndex = 0;
+let isPrismaNavigating = false;
+
+// Expose to window for debugging and external access
+window.prismaHechos = prismaHechos;
+window.currentPrismaFace = currentPrismaFace;
 
 // DOM elements for news reader
 const readerPanel = document.getElementById('newsReader');
@@ -11,17 +23,42 @@ const readerSource = document.getElementById('readerSource');
 const readerTitle = document.getElementById('readerTitle');
 const readerContent = document.getElementById('readerContent');
 
-function openArticle(data) {
-    readerSource.textContent = `${data.source} • ${data.city}`;
-    readerTitle.textContent = data.title;
-    readerContent.innerHTML = `
-        <p><strong>${data.city}</strong> — ${data.summary}</p>
-        <a href="${data.url}" target="_blank" class="read-more-btn">Leer artículo original <i data-lucide="external-link" style="width:14px;vertical-align:middle;"></i></a>
-    `;
+function openReader(articles) {
+    if (!articles || articles.length === 0) return;
+
+    // Use the first article for location info (assuming all in group are same location)
+    const first = articles[0];
+    const isSingle = articles.length === 1;
+
+    // Header title
+    if (isSingle) {
+        readerSource.textContent = `${first.source} • ${first.city}`;
+        readerTitle.textContent = first.title;
+    } else {
+        readerSource.textContent = `${first.city}`;
+        readerTitle.textContent = `${articles.length} Noticias Destacadas`;
+    }
+
+    // Connect content
+    // We'll map each article to HTML
+    const contentHTML = articles.map(data => `
+        <div class="article-block" style="margin-bottom: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px;">
+            <div style="font-size: 0.9em; opacity: 0.7; margin-bottom: 5px;">${data.source} • ${data.date}</div>
+            ${!isSingle ? `<h3 style="margin: 0 0 10px 0; font-size: 1.2em;">${data.title}</h3>` : ''}
+            <p style="line-height: 1.6;">${data.summary}</p>
+            <a href="${data.url}" target="_blank" class="read-more-btn" style="display: inline-block; margin-top: 10px;">
+                Leer artículo original <i data-lucide="external-link" style="width:14px;vertical-align:middle;"></i>
+            </a>
+        </div>
+    `).join('');
+
+    readerContent.innerHTML = contentHTML;
     readerPanel.classList.add('open');
     lucide.createIcons();
+
     if (world) {
-        world.pointOfView({ lat: data.lat, lng: data.lng, altitude: 1.2 }, 2000);
+        // Focus on the location
+        world.pointOfView({ lat: first.lat, lng: first.lng, altitude: 1.2 }, 2000);
         world.controls().autoRotate = false;
     }
 }
@@ -38,7 +75,7 @@ function updateNewsList() {
         const li = document.createElement('li');
         li.textContent = item.title;
         li.title = item.summary;
-        li.onclick = () => openArticle(item);
+        li.onclick = () => openReader([item]);
         newsList.appendChild(li);
     });
     console.log('News list updated, now has', newsList.children.length, 'items');
@@ -113,18 +150,20 @@ function changeMonth(offset) {
     renderCalendar();
 }
 
-async function fetchDates() {
+async function fetchDates(topic = null) {
     try {
-        const res = await fetch('/api/dates');
+        let url = `/api/dates?t=${Date.now()}`;
+        if (topic) url += `&topic=${encodeURIComponent(topic)}`;
+
+        const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to fetch dates');
         availableDates = await res.json();
 
-        // Select the most recent date by default
-        if (availableDates.length > 0) {
-            // Sort just in case
+        // Select the most recent date by default if nothing selected
+        if (availableDates.length > 0 && !selectedDate) {
             availableDates.sort((a, b) => new Date(b.date) - new Date(a.date));
             selectedDate = availableDates[0].date;
-            calendarDate = new Date(selectedDate); // Jump calendar to that month
+            calendarDate = new Date(selectedDate);
         }
         renderCalendar();
     } catch (e) {
@@ -134,7 +173,7 @@ async function fetchDates() {
 
 async function fetchTopics() {
     try {
-        const res = await fetch('/api/topics');
+        const res = await fetch(`/api/topics?t=${Date.now()}`);
         if (!res.ok) throw new Error('Failed to fetch topics');
         const topics = await res.json();
 
@@ -163,10 +202,38 @@ async function fetchTopics() {
         select.addEventListener('change', () => {
             selectedTopic = select.value;
             fetchNews(selectedDate, selectedTopic);
+            fetchDates(selectedTopic); // Update calendar dots to match topic
+            // Sync with timeline
+            if (timelineSection.style.display === 'flex') {
+                updateTimelineView();
+            }
         });
     } catch (e) {
         console.error('Error fetching topics:', e);
     }
+}
+
+/* 
+   Helper to group news by City (or Lat/Lng) 
+   Returns an array of objects: { city, lat, lng, articles: [...] }
+*/
+function groupNewsByLocation(data) {
+    const groups = {};
+    data.forEach(item => {
+        // Create a unique key based on coordinates to handle same-named cities in diff locations if ever needed
+        // But city name is good for display.
+        const key = `${item.city}_${item.lat}_${item.lng}`;
+        if (!groups[key]) {
+            groups[key] = {
+                city: item.city,
+                lat: item.lat,
+                lng: item.lng,
+                articles: []
+            };
+        }
+        groups[key].articles.push(item);
+    });
+    return Object.values(groups);
 }
 
 // Loading & Empty State Helpers
@@ -188,22 +255,25 @@ function hideLoading(isEmpty = false) {
     if (list) list.style.display = isEmpty ? 'none' : 'block';
 }
 
-
 async function fetchNews(dateFilter = null, topicFilter = null) {
     console.log('✅ fetchNews called with date:', dateFilter, 'topic:', topicFilter);
     showLoading();
     try {
-        let url = '/api/news';
-        const params = [];
-        if (dateFilter) params.push(`date=${dateFilter}`);
-        if (topicFilter) params.push(`topic=${encodeURIComponent(topicFilter)}`);
-        if (params.length) url += '?' + params.join('&');
+        let url = `/api/news?t=${Date.now()}`;
+        if (dateFilter) url += `&date=${dateFilter}`;
+        if (topicFilter) url += `&topic=${encodeURIComponent(topicFilter)}`;
         console.log('📡 Fetching:', url);
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
         console.log('📥 Received', data.length, 'articles');
         newsData = data;
+
+        // UI Feedback: Update results count
+        const newsTitle = document.querySelector('.news-list h3');
+        if (newsTitle) {
+            newsTitle.innerHTML = `Noticias <span class="results-badge">${newsData.length} resultados</span>`;
+        }
 
         if (world) {
             console.log('🌍 Updating globe with', newsData.length, 'markers');
@@ -220,9 +290,12 @@ async function fetchNews(dateFilter = null, topicFilter = null) {
     }
 }
 
-
+// Update Globe Data needs to use grouping
 function updateGlobeData() {
-    if (world) world.htmlElementsData(newsData);
+    if (world) {
+        const grouped = groupNewsByLocation(newsData);
+        world.htmlElementsData(grouped);
+    }
 }
 
 function initializeGlobe() {
@@ -266,24 +339,43 @@ function initializeGlobe() {
             }
         `
     });
+
+    // Prepare initial data
+    const groupedData = groupNewsByLocation(newsData);
+
     world = Globe()(document.getElementById('globeViz'))
         .globeMaterial(earthMat)
         .backgroundImageUrl('./img/night-sky.png')
         .pointOfView({ lat: 40.4168, lng: -3.7038, altitude: 1.5 })
-        .htmlElementsData(newsData)
+        .htmlElementsData(groupedData)
         .htmlLat('lat')
         .htmlLng('lng')
         .htmlElement(d => {
             const el = document.createElement('div');
             el.className = 'news-marker';
+
+            // Marker Visuals
+            // If multiple articles, maybe show count or different style?
+            const count = d.articles.length;
+            const isMulti = count > 1;
+
+            // Generate sources summary for card: "El País (2), El Mundo (1)"
+            const sources = {};
+            d.articles.forEach(a => {
+                sources[a.source] = (sources[a.source] || 0) + 1;
+            });
+            const sourceText = Object.entries(sources).map(([k, v]) => `${k} (${v})`).join(', ');
+
             el.innerHTML = `
-                <div class="marker-dot"></div>
+                <div class="marker-dot" style="${isMulti ? 'background: #ffaa00; box-shadow: 0 0 10px #ffaa00;' : ''}"></div>
                 <div class="marker-card">
-                    <div class="marker-source">${d.source}</div>
-                    <div class="marker-title">${d.title}</div>
+                    <div class="marker-source">${d.city}</div>
+                    <div class="marker-title">
+                        ${isMulti ? `<strong>${count} Noticias</strong><br><span style='font-size:0.8em'>${sourceText}</span>` : d.articles[0].title}
+                    </div>
                 </div>
             `;
-            el.onclick = e => { e.stopPropagation(); openArticle(d); };
+            el.onclick = e => { e.stopPropagation(); openReader(d.articles); };
             return el;
         })
         .showAtmosphere(true)
@@ -355,6 +447,976 @@ function handleSend() {
 chatSend.addEventListener('click', handleSend);
 chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSend(); });
 
+// View Switching Logic
+const viewGlobeBtn = document.getElementById('viewGlobe');
+const viewTimelineBtn = document.getElementById('viewTimeline');
+const globeViz = document.getElementById('globeViz');
+const leftPanel = document.querySelector('.left-panel');
+const timelineSection = document.getElementById('timelineSection');
+const calendarContainer = document.querySelector('.calendar-container');
+const topicSelectContainer = document.querySelector('.topic-select');
+const newsListContainer = document.querySelector('.news-list');
+
+function switchToTimeline() {
+    viewGlobeBtn.classList.remove('active');
+    viewTimelineBtn.classList.add('active');
+
+    // Show only the necessary parts of the left panel (topic selection)
+    globeViz.style.display = 'none';
+    calendarContainer.style.display = 'none';
+    newsListContainer.style.display = 'none';
+    leftPanel.style.display = 'flex'; // Keep shared filters visible
+
+    // Show timeline section
+    timelineSection.style.display = 'flex';
+
+    fetchMacros();
+    updateTimelineView();
+}
+
+function switchToGlobe() {
+    viewTimelineBtn.classList.remove('active');
+    viewGlobeBtn.classList.add('active');
+
+    // Restore full left panel
+    globeViz.style.display = 'block';
+    leftPanel.style.display = 'flex';
+    calendarContainer.style.display = 'block';
+    newsListContainer.style.display = 'block';
+
+    // Hide timeline section
+    timelineSection.style.display = 'none';
+}
+
+viewTimelineBtn.addEventListener('click', switchToTimeline);
+viewGlobeBtn.addEventListener('click', switchToGlobe);
+
+// Timeline State Management
+let currentMacro = null;
+let timelineZoom = 300; // Default
+
+function scrollToEnd() {
+    const container = document.querySelector('.timeline-track-container');
+    if (container) {
+        // Use timeout to ensure DOM is rendered
+        setTimeout(() => {
+            container.scrollLeft = container.scrollWidth;
+        }, 100);
+    }
+}
+
+// Zoom Control
+const zoomSlider = document.getElementById('timelineZoom');
+const timelineTrack = document.querySelector('.timeline-track-container');
+
+if (zoomSlider) {
+    zoomSlider.addEventListener('input', (e) => {
+        timelineZoom = parseInt(e.target.value);
+        document.documentElement.style.setProperty('--timeline-item-width', `${timelineZoom}px`);
+        updateTimelineView();
+    });
+}
+
+// Wheel Zoom & Horizontal Scroll bridge
+if (timelineTrack) {
+    timelineTrack.addEventListener('wheel', (e) => {
+        if (e.ctrlKey) {
+            // CTRL + Wheel = Zoom
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -50 : 50;
+            const newVal = Math.min(600, Math.max(100, timelineZoom + delta));
+            if (newVal !== timelineZoom) {
+                timelineZoom = newVal;
+                if (zoomSlider) zoomSlider.value = timelineZoom;
+                document.documentElement.style.setProperty('--timeline-item-width', `${timelineZoom}px`);
+                updateTimelineView();
+            }
+        } else {
+            // Normal Wheel = Horizontal Scroll
+            e.preventDefault();
+            timelineTrack.scrollLeft += e.deltaY;
+        }
+    }, { passive: false });
+}
+
+function updateTimelineView() {
+    if (timelineZoom < 200) {
+        renderMacroTimeline();
+    } else {
+        if (currentMacro) {
+            renderHechoTimeline(currentMacro);
+        } else {
+            // If no macro selected and zooming in, show message or all macros still?
+            // Better: keep showing macros but with a prompt
+            renderMacroTimeline();
+        }
+    }
+}
+
+async function renderMacroTimeline() {
+    const list = document.getElementById('timelineList');
+    // Using a simple flag to avoid double fetching every time we move the slider,
+    // but only if the list already has items.
+    if (list.dataset.view === 'macros' && list.children.length > 0) return;
+
+    list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Cargando procesos globales...</p></div>';
+    list.dataset.view = 'macros';
+
+    try {
+        const url = selectedTopic
+            ? `/api/macros/timeline?topic=${encodeURIComponent(selectedTopic)}`
+            : '/api/macros/timeline';
+        const res = await fetch(url);
+        const macros = await res.json();
+
+        list.innerHTML = '';
+        macros.forEach((m, index) => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item macro-item';
+            item.innerHTML = `
+                <div class="timeline-content">
+                    <span class="timeline-tag">MACRO-PROCESO</span>
+                    <div class="timeline-date">${m.date || 'Sin fecha registrada'}</div>
+                    <div class="timeline-title">${m.nombre}</div>
+                    <button class="macro-enter-btn">Entrar al detalle <i data-lucide="zoom-in"></i></button>
+                </div>
+            `;
+            item.onclick = () => {
+                currentMacro = m.nombre;
+                const macroSelect = document.getElementById('macroSelect');
+                macroSelect.value = m.nombre;
+                // Auto zoom-in when clicking a macro
+                zoomSlider.value = 350;
+                timelineZoom = 350;
+                document.documentElement.style.setProperty('--timeline-item-width', '350px');
+                updateTimelineView();
+            };
+            list.appendChild(item);
+        });
+        if (window.lucide) lucide.createIcons();
+        scrollToEnd();
+    } catch (e) {
+        console.error('Error fetching global timeline:', e);
+    }
+}
+
+async function renderHechoTimeline(macroName) {
+    const list = document.getElementById('timelineList');
+    // Only fetch if view changed or macro changed
+    if (list.dataset.view === 'hechos' && list.dataset.activeMacro === macroName) return;
+
+    list.dataset.view = 'hechos';
+    list.dataset.activeMacro = macroName;
+    list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Cargando hitos del evento...</p></div>';
+
+    try {
+        const res = await fetch(`/api/timeline/${encodeURIComponent(macroName)}?t=${Date.now()}`);
+        const hechos = await res.json();
+
+        list.innerHTML = '';
+        if (hechos.length === 0) {
+            list.innerHTML = '<p class="empty-state">No hay hechos registrados para este evento.</p>';
+            return;
+        }
+
+        hechos.forEach((h, index) => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item hecho-item';
+            item.innerHTML = `
+                <div class="timeline-content">
+                    <span class="timeline-tag">HITO #${index + 1}</span>
+                    <div class="timeline-date">${h.date || 'Fecha pendiente'}</div>
+                    <div class="timeline-title">${h.id}</div>
+                </div>
+            `;
+            item.onclick = () => openComparison(h);
+            list.appendChild(item);
+        });
+        scrollToEnd();
+    } catch (e) {
+        console.error('Error fetching hechos:', e);
+    }
+}
+
+// Override old functions to use the new zoom-aware logic
+async function fetchMacros() {
+    const macroSelect = document.getElementById('macroSelect');
+    if (macroSelect.options.length > 1) return; // Already fetched
+
+    try {
+        const res = await fetch(`/api/macros?t=${Date.now()}`);
+        const macros = await res.json();
+        macros.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.nombre;
+            opt.textContent = m.nombre;
+            macroSelect.appendChild(opt);
+        });
+
+        // Initial view
+        updateTimelineView();
+    } catch (e) {
+        console.error('Error fetching macros:', e);
+    }
+}
+
+document.getElementById('macroSelect').addEventListener('change', (e) => {
+    currentMacro = e.target.value;
+    if (currentMacro) {
+        // Switch to hecho view manually if a macro is selected
+        if (timelineZoom < 200) {
+            zoomSlider.value = 350;
+            timelineZoom = 350;
+            document.documentElement.style.setProperty('--timeline-item-width', '350px');
+        }
+        updateTimelineView();
+    } else {
+        updateTimelineView();
+    }
+});
+
+// Comparison Panel Logic
+const comparisonPanel = document.getElementById('comparisonPanel');
+const colElPais = document.querySelector('#colElPais .column-content');
+const colElMundo = document.querySelector('#colElMundo .column-content');
+
+async function openComparison(hecho) {
+    document.getElementById('comparisonEventTitle').textContent = hecho.id;
+    document.getElementById('comparisonEventDate').textContent = hecho.date;
+
+    colElPais.innerHTML = '<div class="spinner"></div>';
+    colElMundo.innerHTML = '<div class="spinner"></div>';
+    comparisonPanel.classList.add('open');
+
+    try {
+        const res = await fetch(`/api/hecho/${encodeURIComponent(hecho.id)}/articles?t=${Date.now()}`);
+        const articles = await res.json();
+
+        colElPais.innerHTML = '';
+        colElMundo.innerHTML = '';
+
+        const paisArts = articles.filter(a => a.medio.toLowerCase().includes('país'));
+        const mundoArts = articles.filter(a => a.medio.toLowerCase().includes('mundo'));
+
+        const paisLogo = 'https://upload.wikimedia.org/wikipedia/commons/e/e0/El_Pa%C3%ADs_logo.svg';
+        const mundoLogo = 'https://upload.wikimedia.org/wikipedia/commons/9/90/El_Mundo_logo.svg';
+
+        if (paisArts.length === 0) {
+            colElPais.innerHTML = '<p class="empty-state">No hay artículos de El País para este hecho.</p>';
+        } else {
+            const header = document.createElement('div');
+            header.className = 'newspaper-header';
+            header.innerHTML = `<img src="${paisLogo}" alt="El País">`;
+            colElPais.appendChild(header);
+            paisArts.forEach(a => colElPais.appendChild(createCompArticle(a)));
+        }
+
+        if (mundoArts.length === 0) {
+            colElMundo.innerHTML = '<p class="empty-state">No hay artículos de El Mundo para este hecho.</p>';
+        } else {
+            const header = document.createElement('div');
+            header.className = 'newspaper-header';
+            header.innerHTML = `<img src="${mundoLogo}" alt="El Mundo">`;
+            colElMundo.appendChild(header);
+            mundoArts.forEach(a => colElMundo.appendChild(createCompArticle(a)));
+        }
+
+    } catch (e) {
+        console.error('Error fetching comparison:', e);
+    }
+}
+
+function createCompArticle(a) {
+    const div = document.createElement('div');
+    div.className = 'comp-article';
+    div.innerHTML = `
+        <h4>${a.titulo}</h4>
+        <p>${a.summary}</p>
+        <a href="${a.link}" target="_blank" class="read-more">Ver en el medio original <i data-lucide="external-link" style="width:14px;vertical-align:middle;"></i></a>
+    `;
+    return div;
+}
+
+function closeComparison() {
+    comparisonPanel.classList.remove('open');
+}
+
+// =========================================
+// PRISMA 3D LOGIC
+// =========================================
+
+// Prisma State - Defined globally at top of file
+// (currentPrismaFace, prismaHechos, currentHechoIndex, isPrismaNavigating)
+
+// DOM Elements
+const prismaSection = document.getElementById('prismaSection');
+const prisma3d = document.getElementById('prisma3d');
+const viewPrismaBtn = document.getElementById('viewPrisma');
+const prismaNavLeft = document.getElementById('prismaNavLeft');
+const prismaNavRight = document.getElementById('prismaNavRight');
+
+// Rotation angles - use cumulative rotation to avoid "long way around"
+let prismaRotation = 0;  // Current cumulative rotation in degrees
+
+function rotatePrismaTo(faceIndex) {
+    const prisma = document.querySelector('.prisma');
+    if (!prisma) return;
+
+    // Add rotating class for depth effect
+    prisma.classList.add('rotating');
+
+    currentPrismaFace = faceIndex;
+    const targetAngle = -faceIndex * 120;
+
+    // Smooth cumulative rotation (taking the shortest path)
+    const currentAngle = prismaRotation;
+    const diff = ((targetAngle - currentAngle) % 360 + 540) % 360 - 180;
+    prismaRotation += diff;
+
+    prisma.style.transform = `rotateY(${prismaRotation}deg)`;
+
+    // Update active face class (for phone mode visibility)
+    const normalizedIndex = ((faceIndex % 3) + 3) % 3;
+    document.querySelectorAll('.face-dot').forEach((dot, idx) => {
+        dot.classList.toggle('active', idx === normalizedIndex);
+    });
+
+    document.querySelectorAll('.prisma-face').forEach((face, idx) => {
+        face.classList.toggle('active', idx === normalizedIndex);
+    });
+
+    // Remove rotating class after transition
+    setTimeout(() => {
+        prisma.classList.remove('rotating');
+    }, 600); // Match CSS transition duration
+
+    // Load data for specific face if needed
+    // Load data for specific face if needed
+    // Load data for specific face if needed
+    if (normalizedIndex === 0) {
+        loadPrismaComparison(prismaHechos[currentHechoIndex]);
+    } else if (normalizedIndex === 2) {
+        loadPrismaMacroTimeline();
+    }
+}
+
+function rotatePrismaLeft() {
+    rotatePrismaTo(currentPrismaFace - 1);
+}
+
+function rotatePrismaRight() {
+    rotatePrismaTo(currentPrismaFace + 1);
+}
+
+// Swipe detection for prisma
+let prismaStartX = 0;
+let prismaStartY = 0;
+const SWIPE_THRESHOLD = 50;
+
+function handlePrismaTouchStart(e) {
+    const touch = e.touches ? e.touches[0] : e;
+    prismaStartX = touch.clientX;
+    prismaStartY = touch.clientY;
+}
+
+function handlePrismaTouchEnd(e) {
+    const touch = e.changedTouches ? e.changedTouches[0] : e;
+    const deltaX = touch.clientX - prismaStartX;
+    const deltaY = touch.clientY - prismaStartY;
+
+    // Detect horizontal swipes - handle a minimum distance and check horizontal vs vertical
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+        if (deltaX > 0) {
+            rotatePrismaLeft(); // Swipe right -> go to previous face
+        } else {
+            rotatePrismaRight(); // Swipe left -> go to next face
+        }
+    }
+}
+
+// Fetch recent hechos for prisma events face
+async function fetchPrismaHechos() {
+    try {
+        const res = await fetch(`/api/hechos/recent?t=${Date.now()}`);
+        if (!res.ok) throw new Error('Failed to fetch hechos');
+        prismaHechos = await res.json();
+
+        if (prismaHechos.length > 0) {
+            currentHechoIndex = 0;
+            renderPrismaEvents(prismaHechos);
+            updateMiniGlobePosition(0);
+
+            // If we are already on a specific face, reload it now that we have data
+            if (currentPrismaFace === 1) {
+                loadPrismaComparison(prismaHechos[0]);
+            } else if (currentPrismaFace === 2) {
+                loadPrismaMacroTimeline();
+            }
+        } else {
+            document.getElementById('eventsContainer').innerHTML =
+                '<div class="event-card"><h3>No hay eventos disponibles</h3><p>No se encontraron hechos con cobertura de ambos medios.</p></div>';
+        }
+    } catch (e) {
+        console.error('Error fetching prisma hechos:', e);
+    }
+}
+
+function renderPrismaEvents(hechos) {
+    const container = document.getElementById('eventsContainer');
+    if (!container) return;
+
+    container.innerHTML = hechos.map((h, index) => `
+        <div class="event-card ${index === currentHechoIndex ? 'active' : ''}" data-index="${index}">
+            <span class="event-tag">DATOS DEL HECHO</span>
+            <h3>${h.id}</h3>
+            <p>${h.text}</p>
+            <div class="event-date">${h.date || ''}</div>
+        </div>
+    `).join('');
+
+    // Scroll detection - remove old to prevent duplicates
+    container.removeEventListener('scroll', handlePrismaEventsScroll);
+    container.addEventListener('scroll', handlePrismaEventsScroll);
+
+    // Initial header
+    updatePrismaEventHeader(0);
+}
+
+function handlePrismaEventsScroll() {
+    if (isPrismaNavigating) return; // Don't trigger updates during purposeful navigation
+
+    const container = document.getElementById('eventsContainer');
+    if (!container) return;
+
+    const cards = container.querySelectorAll('.event-card');
+    const containerRect = container.getBoundingClientRect();
+    const containerCenter = containerRect.top + containerRect.height / 2;
+
+    cards.forEach((card, index) => {
+        const rect = card.getBoundingClientRect();
+        const cardCenter = rect.top + rect.height / 2;
+
+        // Dynamic scaling/opacity based on distance to center
+        const distanceFromCenter = Math.abs(containerCenter - cardCenter);
+        const threshold = rect.height / 2;
+
+        if (distanceFromCenter < threshold) {
+            card.classList.add('active');
+            if (currentHechoIndex !== index) {
+                currentHechoIndex = index;
+                updatePrismaEventHeader(index);
+                updateTimelineActiveNode(prismaHechos[index]?.id);
+                updateMiniGlobePosition(index);
+            }
+        } else {
+            card.classList.remove('active');
+        }
+    });
+}
+
+function updateMiniGlobePosition(index) {
+    if (!miniGlobeViz || !prismaHechos[index]) return;
+
+    const hecho = prismaHechos[index];
+    const text = (hecho.text || '').toLowerCase();
+    const macro = (hecho.macroevento || '').toLowerCase();
+    const combined = text + ' ' + macro;
+
+    // Determine location based on keywords in macroevento or text
+    let lat = 40.4168, lng = -3.7038, locationName = "ESPAÑA";
+
+    // Israel-Hamas / Gaza / Middle East
+    if (combined.includes('israel') || combined.includes('hamas') || combined.includes('gaza') || combined.includes('palestin')) {
+        lat = 31.5; lng = 34.8; locationName = "ORIENTE MEDIO";
+    }
+    // DANA / Valencia / Este de España
+    else if (combined.includes('dana') || combined.includes('valencia') || combined.includes('inundacion')) {
+        lat = 39.4699; lng = -0.3763; locationName = "VALENCIA";
+    }
+    // Europa
+    else if (combined.includes('europa') || combined.includes('bruselas') || combined.includes('paris') || combined.includes('berlin')) {
+        lat = 48.8566; lng = 2.3522; locationName = "EUROPA";
+    }
+    // USA
+    else if (combined.includes('trump') || combined.includes('biden') || combined.includes('eeuu') || combined.includes('estados unidos') || combined.includes('washington')) {
+        lat = 38.9072; lng = -77.0369; locationName = "EEUU";
+    }
+    // Ucrania / Rusia
+    else if (combined.includes('ucrania') || combined.includes('rusia') || combined.includes('putin') || combined.includes('zelensky')) {
+        lat = 50.4501; lng = 30.5234; locationName = "UCRANIA";
+    }
+
+    // Update marker data
+    miniGlobeViz.htmlElementsData([{ lat, lng, name: locationName }]);
+
+    // Rotate to focus on location with smooth animation
+    miniGlobeViz.pointOfView({ lat, lng, alt: 0.5 }, 1000);
+}
+
+function updateTimelineActiveNode(hechoId) {
+    if (!hechoId) return;
+    const nodes = document.querySelectorAll('.timeline-node');
+    nodes.forEach(node => {
+        const nodeTitle = node.querySelector('h4')?.textContent;
+        node.classList.toggle('active', nodeTitle === hechoId);
+    });
+}
+
+
+
+function updatePrismaEventHeader(index) {
+    if (index < 0 || index >= prismaHechos.length) return;
+
+    const h = prismaHechos[index];
+    const titleEl = document.getElementById('currentEventTitle');
+    const dateEl = document.getElementById('currentEventDate');
+
+    // Show Macro Event name in the header title as requested
+    if (titleEl) titleEl.textContent = h.macroevento || 'Evento';
+    if (dateEl) dateEl.textContent = h.date || '';
+}
+
+// Load articles for comparison face
+async function loadPrismaComparison(hecho) {
+    if (!hecho) return;
+
+    const titleEl = document.getElementById('comparisonTitle');
+    if (titleEl) titleEl.textContent = hecho.id;
+
+    const colPais = document.getElementById('prismaColPais');
+    const colMundo = document.getElementById('prismaColMundo');
+    const colPaisArticles = document.querySelector('#prismaColPais .col-articles');
+    const colMundoArticles = document.querySelector('#prismaColMundo .col-articles');
+
+    // Reset visibility
+    if (colPais) colPais.style.display = 'flex';
+    if (colMundo) colMundo.style.display = 'flex';
+
+    if (colPaisArticles) colPaisArticles.innerHTML = '<div class="spinner"></div>';
+    if (colMundoArticles) colMundoArticles.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`/api/hecho/${encodeURIComponent(hecho.id)}/articles?t=${Date.now()}`);
+        const articles = await res.json();
+
+        const paisArts = articles.filter(a => a.medio.toLowerCase().includes('país'));
+        const mundoArts = articles.filter(a => a.medio.toLowerCase().includes('mundo'));
+
+        const hasPais = paisArts.length > 0;
+        const hasMundo = mundoArts.length > 0;
+
+        // Show/hide columns based on availability
+        if (colPais) colPais.style.display = hasPais ? 'flex' : 'none';
+        if (colMundo) colMundo.style.display = hasMundo ? 'flex' : 'none';
+
+        // Render El País articles
+        if (colPaisArticles && hasPais) {
+            colPaisArticles.innerHTML = '';
+            paisArts.forEach(a => {
+                const article = document.createElement('div');
+                article.className = 'prisma-article';
+                article.innerHTML = `
+                    <h4>${a.titulo}</h4>
+                    <p>${a.summary || ''}</p>
+                `;
+                article.onclick = () => window.open(a.link, '_blank');
+                colPaisArticles.appendChild(article);
+            });
+        }
+
+        // Render El Mundo articles
+        if (colMundoArticles && hasMundo) {
+            colMundoArticles.innerHTML = '';
+            mundoArts.forEach(a => {
+                const article = document.createElement('div');
+                article.className = 'prisma-article';
+                article.innerHTML = `
+                    <h4>${a.titulo}</h4>
+                    <p>${a.summary || ''}</p>
+                `;
+                article.onclick = () => window.open(a.link, '_blank');
+                colMundoArticles.appendChild(article);
+            });
+        }
+
+        // If neither has articles - should not happen but handle gracefully
+        if (!hasPais && !hasMundo) {
+            if (colPais) {
+                colPais.style.display = 'flex';
+                colPaisArticles.innerHTML = '<p style="text-align:center;opacity:0.5;padding:20px;">Sin artículos disponibles</p>';
+            }
+        }
+    } catch (e) {
+        console.error('Error loading comparison:', e);
+    }
+}
+
+// Load macro timeline for timeline face
+async function loadPrismaMacroTimeline() {
+    // If no data yet, show loading state
+    if (prismaHechos.length === 0) {
+        const timeline = document.getElementById('verticalTimeline');
+        if (timeline) {
+            timeline.innerHTML = '<div class="spinner" style="margin:50px auto;"></div><p style="text-align:center;opacity:0.5;margin-top:10px;">Cargando datos...</p>';
+        }
+        return;
+    }
+
+    const currentHecho = prismaHechos[currentHechoIndex];
+    const macroName = currentHecho?.macroevento;
+
+    const titleEl = document.getElementById('timelineMacroTitle');
+    if (titleEl) titleEl.textContent = macroName || 'Línea Temporal';
+
+    const timeline = document.getElementById('verticalTimeline');
+    if (!timeline) return;
+
+    timeline.innerHTML = '<div class="spinner" style="margin:20px auto;"></div>';
+
+    try {
+        if (!macroName || macroName === 'Sin clasificar') {
+            // Just show the current hechos as the timeline
+            renderVerticalTimeline(prismaHechos, currentHechoIndex);
+            return;
+        }
+
+        const res = await fetch(`/api/timeline/${encodeURIComponent(macroName)}?t=${Date.now()}`);
+        const hechos = await res.json();
+
+        // Find current hecho index in this list
+        const currentIdxInTimeline = hechos.findIndex(h => h.id === currentHecho.id);
+        renderVerticalTimeline(hechos, currentIdxInTimeline >= 0 ? currentIdxInTimeline : 0);
+    } catch (e) {
+        console.error('Error loading macro timeline:', e);
+        timeline.innerHTML = '<p style="text-align:center;opacity:0.5;">Error cargando timeline</p>';
+    }
+}
+
+function renderVerticalTimeline(hechos, activeIndex) {
+    const timeline = document.getElementById('verticalTimeline');
+    if (!timeline) return;
+
+    timeline.innerHTML = '';
+
+    // Backend now returns DESC order (most recent first)
+    // No need to reverse anymore
+
+    hechos.forEach((h, index) => {
+        const node = document.createElement('div');
+        node.className = 'timeline-node' + (index === activeIndex ? ' active' : '');
+        node.innerHTML = `
+            <div class="timeline-node-content">
+                <h4>${h.id}</h4>
+                <span>${h.date || ''}</span>
+            </div>
+        `;
+        node.onclick = async (e) => {
+            e.stopPropagation();
+
+            // Highlight this node immediately
+            document.querySelectorAll('.timeline-node').forEach(n => n.classList.remove('active'));
+            node.classList.add('active');
+
+            // Find current match
+            let prismaMatchIndex = prismaHechos.findIndex(ph => ph.id === h.id);
+
+            // FETCH CONTEXT: Get other events from the same date to allow scrolling context
+            if (h.date) {
+                try {
+                    const res = await fetch(`/api/hechos/by-date/${h.date}?t=${Date.now()}`);
+                    const contextHechos = await res.json();
+
+                    // Merge context hechos avoiding duplicates
+                    contextHechos.forEach(ch => {
+                        if (!prismaHechos.some(ph => ph.id === ch.id)) {
+                            prismaHechos.push(ch);
+                        }
+                    });
+
+                    // Sort by date descending to maintain timeline order
+                    prismaHechos.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                    // Re-render feed so the context is physically there for scrolling
+                    renderPrismaEvents(prismaHechos);
+
+                    // Re-calculate index as it might have moved or been newly added
+                    prismaMatchIndex = prismaHechos.findIndex(ph => ph.id === h.id);
+                } catch (err) {
+                    console.error('Error fetching contextual events:', err);
+                }
+            }
+
+
+            // If not found, inject it dynamically to the current feed
+            if (prismaMatchIndex < 0) {
+                console.log('Event not in feed, injecting dynamically:', h.id);
+                // We create a full hecho object from the timeline node data
+                const newHecho = {
+                    id: h.id,
+                    date: h.date,
+                    text: h.text || 'Descripción no disponible',
+                    macroevento: document.getElementById('timelineMacroTitle')?.textContent || 'Evento',
+                    newspapers: [] // Will be loaded dynamically if needed
+                };
+                prismaHechos.push(newHecho);
+                renderPrismaEvents(prismaHechos); // Re-render feed to include new card
+                prismaMatchIndex = prismaHechos.length - 1;
+            }
+
+            if (prismaMatchIndex >= 0) {
+                isPrismaNavigating = true;
+                currentHechoIndex = prismaMatchIndex;
+                updatePrismaEventHeader(currentHechoIndex);
+
+                // Rotate to events view (Face 1)
+                rotatePrismaTo(1);
+
+                // Scroll to target card in Face 1 (with enough delay for 3D transition)
+                setTimeout(() => {
+                    const container = document.getElementById('eventsContainer');
+                    const cards = container?.querySelectorAll('.event-card');
+                    const card = container?.querySelector(`[data-index="${currentHechoIndex}"]`);
+
+                    if (card && container) {
+                        // Clear all active first and set the target one
+                        cards.forEach(c => c.classList.remove('active'));
+                        card.classList.add('active');
+
+                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        console.log('Scrolled to card index:', currentHechoIndex);
+                    }
+
+                    // Reset flag after transition finishes
+                    setTimeout(() => {
+                        isPrismaNavigating = false;
+                        console.log('Navigation lock released');
+                    }, 1200);
+                }, 700);
+            }
+        };
+        timeline.appendChild(node);
+    });
+
+    // Scroll to active node
+    setTimeout(() => {
+        const activeNode = timeline.querySelector('.timeline-node.active');
+        if (activeNode) {
+            activeNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 100);
+}
+
+function initMiniGlobe() {
+    const container = document.getElementById('miniGlobe');
+    if (!container || miniGlobeViz) return;
+
+    container.innerHTML = '';
+
+    // Default marker location (Madrid/Spain)
+    const defaultMarker = [{ lat: 40.4168, lng: -3.7038, name: "ESPAÑA" }];
+
+    // Mobile-responsive globe size - uses container width for phone simulator
+    const isPhoneSimulator = document.querySelector('.phone-screen');
+    const isMobile = window.innerWidth <= 480;
+
+    let globeSize;
+    if (isPhoneSimulator) {
+        // Use 92% of container width for immersive view
+        const containerWidth = container.parentElement?.offsetWidth || 390;
+        globeSize = Math.floor(containerWidth * 0.92);
+    } else {
+        globeSize = isMobile ? 120 : 320;
+    }
+
+    miniGlobeViz = Globe()
+        (container)
+        .backgroundColor('rgba(0,0,0,0)')
+        .globeImageUrl('./img/earth-blue-marble.jpg')
+        .bumpImageUrl('./img/earth-topology.png')
+        .width(globeSize)
+        .height(globeSize)
+        .showAtmosphere(true)
+        .atmosphereColor('lightskyblue')
+        .atmosphereAltitude(0.15)
+        // Pulsing markers
+        .htmlElementsData(defaultMarker)
+        .htmlLat('lat')
+        .htmlLng('lng')
+        .htmlElement(d => {
+            const el = document.createElement('div');
+            el.className = 'mini-globe-marker';
+            el.innerHTML = `<div class="marker-dot pulse"></div>`;
+            return el;
+        });
+
+    // Add clouds with delay
+    setTimeout(() => {
+        // Correct texture path: earth-clouds.png
+        const cloudTexture = new THREE.TextureLoader().load(`./img/earth-clouds.png?t=${Date.now()}`);
+        const radius = miniGlobeViz.getGlobeRadius() || 100;
+        const cloudGeo = new THREE.SphereGeometry(radius * 1.01, 48, 48);
+        const cloudMat = new THREE.MeshPhongMaterial({ map: cloudTexture, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
+        const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+        miniGlobeViz.scene().add(clouds);
+
+        miniGlobeViz.scene().add(new THREE.AmbientLight(0xffffff, 0.7));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(1, 0.5, 1);
+        miniGlobeViz.scene().add(sun);
+
+        (function animateClouds() {
+            clouds.rotation.y += 0.0003;
+            requestAnimationFrame(animateClouds);
+        })();
+    }, 300);
+
+    miniGlobeViz.controls().enableZoom = false;
+    miniGlobeViz.controls().autoRotate = true;
+    miniGlobeViz.controls().autoRotateSpeed = 0.3;
+    miniGlobeViz.pointOfView({ lat: 40.4168, lng: -3.7038, alt: 0.5 });
+}
+
+// View Switching - Add Prisma
+function switchToPrisma() {
+    viewGlobeBtn.classList.remove('active');
+    viewTimelineBtn.classList.remove('active');
+    viewPrismaBtn.classList.add('active');
+
+    // Hide other views
+    globeViz.style.display = 'none';
+    timelineSection.style.display = 'none';
+    leftPanel.style.display = 'none';
+
+    // Hide chatbot to prevent blocking right nav button
+    const chatbotContainer = document.querySelector('.chatbot-container');
+    if (chatbotContainer) chatbotContainer.style.display = 'none';
+
+    // Show prisma
+    prismaSection.style.display = 'block';
+
+    // Initialize prisma data
+    if (prismaHechos.length === 0) {
+        fetchPrismaHechos();
+    }
+
+    // Initialize mini globe
+    initMiniGlobe();
+
+    // Reinitialize icons
+    if (window.lucide) lucide.createIcons();
+}
+
+// Update switchToGlobe to handle Prisma
+function switchToGlobeFromPrisma() {
+    viewPrismaBtn.classList.remove('active');
+    prismaSection.style.display = 'none';
+    // Restore chatbot
+    const chatbotContainer = document.querySelector('.chatbot-container');
+    if (chatbotContainer) chatbotContainer.style.display = 'flex';
+    switchToGlobe();
+}
+
+function switchToTimelineFromPrisma() {
+    viewPrismaBtn.classList.remove('active');
+    prismaSection.style.display = 'none';
+    // Restore chatbot
+    const chatbotContainer = document.querySelector('.chatbot-container');
+    if (chatbotContainer) chatbotContainer.style.display = 'flex';
+    switchToTimeline();
+}
+
+// Initialize Prisma event listeners
+function initPrisma() {
+    console.log('🔷 initPrisma called');
+    console.log('  prismaNavLeft:', prismaNavLeft);
+    console.log('  prismaNavRight:', prismaNavRight);
+
+    // Navigation buttons
+    if (prismaNavLeft) {
+        prismaNavLeft.addEventListener('click', (e) => {
+            console.log('⬅️ Left button clicked');
+            e.stopPropagation();
+            rotatePrismaLeft();
+        });
+    }
+    if (prismaNavRight) {
+        prismaNavRight.addEventListener('click', (e) => {
+            console.log('➡️ Right button clicked');
+            e.stopPropagation();
+            rotatePrismaRight();
+        });
+    }
+
+    // Swipe gestures on viewport
+    const viewport = document.querySelector('.prisma-viewport');
+    if (viewport) {
+        viewport.addEventListener('touchstart', handlePrismaTouchStart, { passive: true });
+        viewport.addEventListener('touchend', handlePrismaTouchEnd);
+
+        // Mouse drag for desktop
+        viewport.addEventListener('mousedown', handlePrismaTouchStart);
+        viewport.addEventListener('mouseup', handlePrismaTouchEnd);
+    }
+
+    // Face indicator dot clicks
+    document.querySelectorAll('.face-dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+            const face = parseInt(dot.dataset.face);
+            rotatePrismaTo(face);
+        });
+    });
+
+    // View button
+    if (viewPrismaBtn) {
+        viewPrismaBtn.addEventListener('click', switchToPrisma);
+    }
+
+    // Update other view buttons to also hide prisma
+    if (viewGlobeBtn) {
+        viewGlobeBtn.addEventListener('click', () => {
+            if (prismaSection.style.display !== 'none') {
+                switchToGlobeFromPrisma();
+            }
+        });
+    }
+    if (viewTimelineBtn) {
+        viewTimelineBtn.addEventListener('click', () => {
+            if (prismaSection.style.display !== 'none') {
+                switchToTimelineFromPrisma();
+            }
+        });
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+        if (prismaSection.style.display === 'none') return;
+
+        if (e.key === 'ArrowLeft') rotatePrismaLeft();
+        if (e.key === 'ArrowRight') rotatePrismaRight();
+    });
+
+    // Mouse wheel support for eventsContainer
+    const eventsContainer = document.getElementById('eventsContainer');
+    if (eventsContainer) {
+        eventsContainer.addEventListener('wheel', (e) => {
+            // If on events face, allow wheel to scroll
+            if (currentPrismaFace === 0) {
+                // Default behavior might be blocked by 3D transforms or parent listeners
+                // We'll ensure it scrolls and snaps
+                if (Math.abs(e.deltaY) > 10) {
+                    const direction = e.deltaY > 0 ? 1 : -1;
+                    eventsContainer.scrollBy({
+                        top: direction * 400, // Reasonable scroll amount to trigger snap
+                        behavior: 'smooth'
+                    });
+                    e.preventDefault();
+                }
+            }
+        }, { passive: false });
+    }
+}
+
+
 // Initialization on page load
 window.addEventListener('load', async () => {
     await fetchDates();
@@ -372,4 +1434,12 @@ window.addEventListener('load', async () => {
     const nextBtn = document.getElementById('nextMonth');
     if (prevBtn) prevBtn.addEventListener('click', () => changeMonth(-1));
     if (nextBtn) nextBtn.addEventListener('click', () => changeMonth(1));
+
+    // Initialize Prisma
+    initPrisma();
+    // Set initial active face to 1 (Events/Center)
+    rotatePrismaTo(1);
+
+    // Initialize Lucide icons
+    if (window.lucide) lucide.createIcons();
 });
