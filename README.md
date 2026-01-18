@@ -15,10 +15,11 @@ Prisma Aletheia es una aplicación web que permite explorar y analizar noticias 
 ### Características Principales
 
 - **🌐 Globo Interactivo**: Visualización de noticias sobre un globo 3D con marcadores geolocalizados
+- **💻 Modo Desktop Completo**: Carrusel inmersivo de 3 paneles (Noticias, Eventos, Timeline)
+- **📱 Simulador Mobile**: Vista Prisma optimizada para emular la experiencia móvil
+- **🔄 Sistema de Toggles Unificado**: Navegación fluida entre modos (Phone/Desktop/Globe)
 - **📅 Timeline Horizontal**: Línea de tiempo de macro-eventos y hechos históricos
-- **📱 Vista Prisma**: Simulador móvil con navegación entre caras que muestra comparativas de medios, eventos del día y línea temporal vertical
 - **🔍 Filtros Avanzados**: Filtrado por fecha, temas y macro-eventos
-- **💬 Chatbot Integrado**: Interfaz de asistente IA para consultas (placeholder)
 
 ---
 
@@ -41,8 +42,8 @@ Frontend/
 │   ├── globe.gl.min.js         # Globe.gl para visualización del globo
 │   └── lucide.min.js           # Iconos Lucide
 ├── index.html                  # Página principal
-├── script.js                   # Lógica del frontend (~1450 líneas)
-├── styles.css                  # Estilos CSS (~2130 líneas)
+├── script.js                   # Lógica del frontend (~1600 líneas)
+├── styles.css                  # Estilos CSS (~2300 líneas)
 └── narrative_graph_spec.md     # Especificación del grafo de conocimiento
 ```
 
@@ -141,16 +142,18 @@ El sistema utiliza un grafo de conocimiento narrativo con la siguiente estructur
 - Panel lateral con calendario, filtro de temas y titulares
 - Panel de lectura de artículos
 
-### 2. Vista Timeline
-- Línea de tiempo horizontal a pantalla completa
-- Selector de macro-eventos
-- Control de zoom con slider y rueda del ratón
-- Navegación hacia los eventos más recientes
+### 2. Modo Desktop (Carrusel)
+- **Layout de 3 Paneles**: 
+  - Izquierda: Eventos del día
+  - Centro: Comparativa de noticias
+  - Derecha: Timeline del conflicto
+- Navegación inmersiva con efectos de profundidad
+- Mini-globo integrado en la interfaz
 
-### 3. Vista Prisma (Simulador Móvil)
-- Cara 0: **Comparativa de Medios** - Artículos lado a lado por periódico
-- Cara 1: **Eventos del Día** - Feed de hechos con mini-globo contextual
-- Cara 2: **Línea Temporal** - Timeline vertical de macro-eventos
+### 3. Modo Phone (Simulador Móvil)
+- Emulación fiel de interfaz móvil
+- Navegación por gestos/clicks entre "caras" (Prisma)
+- Experiencia optimizada para contenido vertical
 
 ---
 
@@ -170,6 +173,8 @@ El sistema extrae ubicaciones del título y contenido de los artículos para pos
 ## 📈 Estado Actual del Proyecto
 
 ### ✅ Funcionalidades Implementadas
+- [x] **Sistema de Modos Unificado**: Toggle global para Phone/Desktop/Globe
+- [x] **Modo Desktop**: Nuevo layout de escritorio con carrusel 3D
 - [x] Visualización del globo 3D con Globe.gl
 - [x] Conexión con base de datos Neo4j
 - [x] Filtrado por fecha y tema
