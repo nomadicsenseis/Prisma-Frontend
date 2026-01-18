@@ -488,8 +488,9 @@ function switchToGlobe() {
     timelineSection.style.display = 'none';
 }
 
-viewTimelineBtn.addEventListener('click', switchToTimeline);
-viewGlobeBtn.addEventListener('click', switchToGlobe);
+// Add null checks for removed elements
+if (viewTimelineBtn) viewTimelineBtn.addEventListener('click', switchToTimeline);
+if (viewGlobeBtn) viewGlobeBtn.addEventListener('click', switchToGlobe);
 
 // Timeline State Management
 let currentMacro = null;
@@ -836,15 +837,26 @@ function handlePrismaTouchEnd(e) {
 
 // Fetch recent hechos for prisma events face
 async function fetchPrismaHechos() {
+    console.log('🔸 fetchPrismaHechos called');
     try {
         const res = await fetch(`/api/hechos/recent?t=${Date.now()}`);
+        console.log('🔸 API response status:', res.status);
         if (!res.ok) throw new Error('Failed to fetch hechos');
         prismaHechos = await res.json();
+        console.log('🔸 prismaHechos loaded:', prismaHechos.length, 'items');
 
         if (prismaHechos.length > 0) {
             currentHechoIndex = 0;
             renderPrismaEvents(prismaHechos);
             updateMiniGlobePosition(0);
+
+            // SYNC DESKTOP MODE - Critical for default Desktop view
+            console.log('🔸 prismaMode is:', prismaMode);
+            if (prismaMode === 'desktop') {
+                console.log('🔸 Calling syncDesktopPanels...');
+                syncDesktopPanels();
+                focusDesktopPanel(desktopFocusIndex);
+            }
 
             // If we are already on a specific face, reload it now that we have data
             if (currentPrismaFace === 1) {
@@ -925,8 +937,12 @@ function updateMiniGlobePosition(index) {
     // Determine location based on keywords in macroevento or text
     let lat = 40.4168, lng = -3.7038, locationName = "ESPAÑA";
 
+    // Sudán
+    if (combined.includes('sudán') || combined.includes('sudan') || combined.includes('jartum') || combined.includes('khartoum')) {
+        lat = 15.8575; lng = 30.2176; locationName = "SUDÁN";
+    }
     // Israel-Hamas / Gaza / Middle East
-    if (combined.includes('israel') || combined.includes('hamas') || combined.includes('gaza') || combined.includes('palestin')) {
+    else if (combined.includes('israel') || combined.includes('hamas') || combined.includes('gaza') || combined.includes('palestin')) {
         lat = 31.5; lng = 34.8; locationName = "ORIENTE MEDIO";
     }
     // DANA / Valencia / Este de España
@@ -1440,6 +1456,602 @@ window.addEventListener('load', async () => {
     // Set initial active face to 1 (Events/Center)
     rotatePrismaTo(1);
 
+    // Initialize Desktop Mode listeners
+    initDesktopMode();
+
     // Initialize Lucide icons
     if (window.lucide) lucide.createIcons();
 });
+
+// =========================================
+// PRISMA DESKTOP MODE
+// =========================================
+// =========================================
+// PRISMA DESKTOP MODE
+// =========================================
+
+let prismaMode = 'desktop'; // DEFAULT TO DESKTOP
+let desktopFocusIndex = 1; // Start on Events (center)
+let desktopMiniGlobeViz = null;
+
+// Mode Toggle Elements
+const btnViewPrisma = document.getElementById('viewPrisma');
+const btnViewGlobe = document.getElementById('viewGlobe');
+// Legacy phone/desktop buttons removed or reused?
+const prismaModePhone = document.getElementById('prismaModePhone');
+const prismaModeDesktop = document.getElementById('prismaModeDesktop');
+const desktopNavLeft = document.getElementById('desktopNavLeft');
+const desktopNavRight = document.getElementById('desktopNavRight');
+
+function initDesktopMode() {
+    // Navigation Sidebar
+    if (btnViewPrisma) {
+        btnViewPrisma.addEventListener('click', () => {
+            document.getElementById('fullScreenGlobeContainer').style.display = 'none';
+            document.getElementById('prismaSection').style.display = 'block';
+            switchPrismaMode('desktop');
+            setActiveNav(btnViewPrisma);
+        });
+    }
+
+    if (btnViewGlobe) {
+        btnViewGlobe.addEventListener('click', () => {
+             // Open Globe Mode
+             document.getElementById('prismaSection').style.display = 'none';
+             const globeContainer = document.getElementById('fullScreenGlobeContainer');
+             globeContainer.style.display = 'block';
+             initFullScreenGlobe();
+             setActiveNav(btnViewGlobe);
+        });
+    }
+
+    // Mode toggle buttons (Phone/Desktop/Globe)
+    const prismaModeGlobe = document.getElementById('prismaModeGlobe');
+    
+    // Helper to hide Globe view (original)
+    function hideOriginalGlobeView() {
+        const globeViz = document.getElementById('globeViz');
+        const leftPanel = document.querySelector('.left-panel');
+        if (globeViz) globeViz.style.display = 'none';
+        if (leftPanel) leftPanel.style.display = 'none';
+    }
+    
+    // SIMPLE Mode toggle buttons - use unified switchViewMode
+    if (prismaModePhone) {
+        prismaModePhone.addEventListener('click', () => switchViewMode('phone'));
+    }
+    if (prismaModeDesktop) {
+        prismaModeDesktop.addEventListener('click', () => switchViewMode('desktop'));
+    }
+    if (prismaModeGlobe) {
+        prismaModeGlobe.addEventListener('click', () => switchViewMode('globe'));
+    }
+
+    // Desktop navigation arrows
+    if (desktopNavLeft) desktopNavLeft.addEventListener('click', () => focusDesktopPanel(desktopFocusIndex - 1));
+    if (desktopNavRight) desktopNavRight.addEventListener('click', () => focusDesktopPanel(desktopFocusIndex + 1));
+
+    // Panel click to focus
+    document.querySelectorAll('.desktop-panel').forEach(panel => {
+        panel.addEventListener('click', (e) => {
+            // Ignore clicks on scrollable content, OR on mode toggle buttons
+            if (e.target.closest('.events-scroll-container, .comparison-columns, .vertical-timeline, .prisma-mode-toggle, .mode-btn')) return;
+            const panelIndex = parseInt(panel.dataset.panel);
+            if (!isNaN(panelIndex)) focusDesktopPanel(panelIndex);
+        });
+    });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+        if (prismaMode === 'desktop' && document.getElementById('prismaSection').style.display !== 'none') {
+             if (e.key === 'ArrowLeft') focusDesktopPanel(desktopFocusIndex - 1);
+             if (e.key === 'ArrowRight') focusDesktopPanel(desktopFocusIndex + 1);
+        }
+    });
+
+    // FORCE DESKTOP MODE ON INIT
+    switchViewMode('desktop');
+}
+
+function setActiveNav(activeBtn) {
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    if(activeBtn) activeBtn.classList.add('active');
+}
+
+// Update mode toggle button states (Phone/Desktop/Globe)
+function updateModeToggle(mode) {
+    const phone = document.getElementById('prismaModePhone');
+    const desktop = document.getElementById('prismaModeDesktop');
+    const globe = document.getElementById('prismaModeGlobe');
+    
+    if (phone) phone.classList.toggle('active', mode === 'phone');
+    if (desktop) desktop.classList.toggle('active', mode === 'desktop');
+    if (globe) globe.classList.toggle('active', mode === 'globe');
+}
+
+// =========================================
+// UNIFIED VIEW MODE SWITCHING
+// =========================================
+let currentViewMode = 'desktop'; // Track current mode
+
+function switchViewMode(mode) {
+    console.log('🔀 Switching to mode:', mode);
+    currentViewMode = mode;
+    
+    const prismaSection = document.getElementById('prismaSection');
+    const globeViz = document.getElementById('globeViz');
+    const leftPanel = document.querySelector('.left-panel');
+    const calendarContainer = document.querySelector('.calendar-container');
+    const newsListContainer = document.querySelector('.news-list');
+    
+    // STEP 1: Hide ALL views first
+    if (prismaSection) {
+        prismaSection.style.display = 'none';
+        prismaSection.classList.remove('desktop-mode');
+    }
+    if (globeViz) globeViz.style.display = 'none';
+    if (leftPanel) leftPanel.style.display = 'none';
+    
+    // STEP 2: Show the selected view
+    if (mode === 'phone') {
+        // Phone Mode: Prisma in phone simulator
+        if (prismaSection) {
+            prismaSection.style.display = 'block';
+            prismaSection.classList.remove('desktop-mode');
+        }
+        prismaMode = 'phone';
+        initMiniGlobe();
+        if (prismaHechos.length === 0) fetchPrismaHechos();
+        
+    } else if (mode === 'desktop') {
+        // Desktop Mode: Prisma carousel
+        if (prismaSection) {
+            prismaSection.style.display = 'block';
+            prismaSection.classList.add('desktop-mode');
+        }
+        prismaMode = 'desktop';
+        fetchPrismaHechos(); // Will call syncDesktopPanels when done
+        initDesktopMiniGlobe();
+        focusDesktopPanel(desktopFocusIndex);
+        
+    } else if (mode === 'globe') {
+        // Globe Mode: Original globe view with calendar
+        if (globeViz) globeViz.style.display = 'block';
+        if (leftPanel) leftPanel.style.display = 'flex';
+        if (calendarContainer) calendarContainer.style.display = 'block';
+        if (newsListContainer) newsListContainer.style.display = 'block';
+        initializeGlobe();
+    }
+    
+    // STEP 3: Update toggle buttons
+    updateModeToggle(mode);
+    
+    // Re-initialize Lucide icons
+    if (window.lucide) lucide.createIcons();
+}
+
+function switchPrismaMode(mode) {
+    prismaMode = mode;
+    const prismaSection = document.getElementById('prismaSection');
+
+    // CRITICAL: Force display to override inline style="display:none"
+    if (mode === 'desktop') {
+        prismaSection.style.display = 'block';
+    }
+
+    // Toggle active states on legacy buttons
+    if (prismaModePhone) prismaModePhone.classList.toggle('active', mode === 'phone');
+    if (prismaModeDesktop) prismaModeDesktop.classList.toggle('active', mode === 'desktop');
+
+    // Toggle mode class on container
+    prismaSection.classList.toggle('desktop-mode', mode === 'desktop');
+
+    // Re-initialize lucide icons for new mode
+    if (window.lucide) lucide.createIcons();
+
+    // Sync desktop content if switching to desktop
+    if (mode === 'desktop') {
+        // CRITICAL: Fetch data first, then sync panels
+        fetchPrismaHechos(); // This will call syncDesktopPanels after data loads
+        initDesktopMiniGlobe();
+        focusDesktopPanel(desktopFocusIndex); // Ensure panel classes are applied
+    }
+
+    // Initialize Phone Mode with mini-globe
+    if (mode === 'phone') {
+        prismaSection.style.display = 'block';
+        initMiniGlobe(); // Initialize mini-globe for phone mode
+        if (prismaHechos.length === 0) {
+            fetchPrismaHechos();
+        }
+    }
+}
+
+
+// =========================================
+// FULL SCREEN GLOBE
+// =========================================
+let fullScreenGlobeViz = null;
+
+function initFullScreenGlobe() {
+    const container = document.getElementById('fullScreenGlobe');
+    if (!container) return;
+    
+    // If already initialized, just resize/update
+    if (fullScreenGlobeViz) {
+        // Force resize
+        fullScreenGlobeViz.width(window.innerWidth);
+        fullScreenGlobeViz.height(window.innerHeight);
+        return;
+    }
+
+    container.innerHTML = '';
+    const defaultMarker = [{ lat: 40.4168, lng: -3.7038, name: "ESPAÑA" }];
+
+    fullScreenGlobeViz = Globe()
+        (container)
+        .backgroundColor('#000000') // Space black
+        .globeImageUrl('./img/earth-blue-marble.jpg')
+        .bumpImageUrl('./img/earth-topology.png')
+        .width(window.innerWidth)
+        .height(window.innerHeight)
+        .showAtmosphere(true)
+        .atmosphereColor('lightskyblue')
+        .atmosphereAltitude(0.18)
+        .htmlElementsData(defaultMarker)
+        .htmlLat('lat')
+        .htmlLng('lng')
+        .htmlElement(d => {
+            const el = document.createElement('div');
+            el.className = 'mini-globe-marker'; // Reuse marker style
+            el.innerHTML = '<div class="marker-dot pulse"></div>';
+            return el;
+        });
+
+    // Add clouds layer
+    const cloudTex = new THREE.TextureLoader().load('./img/earth-clouds.png');
+    const CLOUDS_ALT = 0.004;
+    const clouds = new THREE.Mesh(
+        new THREE.SphereGeometry(fullScreenGlobeViz.getGlobeRadius() * (1 + CLOUDS_ALT), 75, 75),
+        new THREE.MeshPhongMaterial({ map: cloudTex, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+    );
+    fullScreenGlobeViz.scene().add(clouds);
+
+    // Animate clouds
+    (function animateFullScreenClouds() {
+        clouds.rotation.y += 0.0002;
+        requestAnimationFrame(animateFullScreenClouds);
+    })();
+
+    fullScreenGlobeViz.controls().enableZoom = true; // Enable zoom for full screen
+    fullScreenGlobeViz.controls().autoRotate = true;
+    fullScreenGlobeViz.controls().autoRotateSpeed = 0.5;
+
+    // Handle Window Resize
+    window.addEventListener('resize', () => {
+        if(fullScreenGlobeViz && document.getElementById('fullScreenGlobeContainer').style.display !== 'none') {
+            fullScreenGlobeViz.width(window.innerWidth);
+            fullScreenGlobeViz.height(window.innerHeight);
+        }
+    });
+}
+
+
+function focusDesktopPanel(index) {
+    // Wrap around 0-2 (Comparison=0, Events=1, Timeline=2)
+    desktopFocusIndex = ((index % 3) + 3) % 3;
+
+    const panels = document.querySelectorAll('.desktop-panel');
+    panels.forEach((panel) => {
+        const i = parseInt(panel.dataset.panel);
+
+        // Remove old classes
+        panel.classList.remove('focused', 'left', 'right');
+
+        if (i === desktopFocusIndex) {
+            // ACTIVE PANEL -> CENTER (Order 2)
+            panel.classList.add('focused');
+            panel.style.order = 2;
+        } else if (i === (desktopFocusIndex - 1 + 3) % 3) {
+            // PREVIOUS PANEL -> LEFT (Order 1)
+            panel.classList.add('left');
+            panel.style.order = 1;
+        } else {
+            // NEXT PANEL -> RIGHT (Order 3)
+            panel.classList.add('right');
+            panel.style.order = 3;
+        }
+    });
+
+    // Update content based on current state when focus changes
+    syncDesktopPanels();
+}
+
+function syncDesktopPanels() {
+    if (prismaHechos.length === 0) return;
+
+    const currentHecho = prismaHechos[currentHechoIndex];
+    if (!currentHecho) return;
+
+    // Sync comparison panel
+    syncDesktopComparison(currentHecho);
+
+    // Sync events panel
+    syncDesktopEvents();
+
+    // Sync timeline panel
+    syncDesktopTimeline(currentHecho);
+
+    // Update headers
+    const titleEl = document.getElementById('desktopEventTitle');
+    const dateEl = document.getElementById('desktopEventDate');
+    if (titleEl) titleEl.textContent = currentHecho.macroevento || 'Evento';
+    if (dateEl) dateEl.textContent = currentHecho.date || '';
+}
+
+async function syncDesktopComparison(hecho) {
+    if (!hecho) return;
+
+    const titleEl = document.getElementById('desktopComparisonTitle');
+    if (titleEl) titleEl.textContent = hecho.id;
+
+    const colPaisArticles = document.querySelector('#desktopColPais .col-articles');
+    const colMundoArticles = document.querySelector('#desktopColMundo .col-articles');
+
+    if (colPaisArticles) colPaisArticles.innerHTML = '<div class="spinner"></div>';
+    if (colMundoArticles) colMundoArticles.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`/api/hecho/${encodeURIComponent(hecho.id)}/articles?t=${Date.now()}`);
+        const articles = await res.json();
+
+        const paisArts = articles.filter(a => a.medio.toLowerCase().includes('país'));
+        const mundoArts = articles.filter(a => a.medio.toLowerCase().includes('mundo'));
+
+        // El País
+        if (colPaisArticles) {
+            if (paisArts.length === 0) {
+                colPaisArticles.innerHTML = '<p style="text-align:center;opacity:0.5;padding:20px;">Sin artículos</p>';
+            } else {
+                colPaisArticles.innerHTML = paisArts.map(a => `
+                    <div class="prisma-article" onclick="window.open('${a.link}', '_blank')">
+                        <h4>${a.titulo}</h4>
+                        <p>${a.summary || ''}</p>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // El Mundo
+        if (colMundoArticles) {
+            if (mundoArts.length === 0) {
+                colMundoArticles.innerHTML = '<p style="text-align:center;opacity:0.5;padding:20px;">Sin artículos</p>';
+            } else {
+                colMundoArticles.innerHTML = mundoArts.map(a => `
+                    <div class="prisma-article" onclick="window.open('${a.link}', '_blank')">
+                        <h4>${a.titulo}</h4>
+                        <p>${a.summary || ''}</p>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (e) {
+        console.error('Error syncing desktop comparison:', e);
+    }
+}
+
+function syncDesktopEvents() {
+    const container = document.getElementById('desktopEventsContainer');
+    if (!container) return;
+
+    container.innerHTML = prismaHechos.map((h, index) => `
+        <div class="event-card ${index === currentHechoIndex ? 'active' : ''}" data-index="${index}">
+            <span class="event-tag">DATOS DEL HECHO</span>
+            <h3>${h.id}</h3>
+            <p>${h.text}</p>
+            <div class="event-date">${h.date || ''}</div>
+        </div>
+    `).join('');
+
+    // Scroll detection for desktop events
+    container.addEventListener('scroll', handleDesktopEventsScroll);
+}
+
+function handleDesktopEventsScroll() {
+    const container = document.getElementById('desktopEventsContainer');
+    if (!container) return;
+
+    const cards = container.querySelectorAll('.event-card');
+    const containerRect = container.getBoundingClientRect();
+    const containerCenter = containerRect.top + containerRect.height / 2;
+
+    cards.forEach((card, index) => {
+        const rect = card.getBoundingClientRect();
+        const cardCenter = rect.top + rect.height / 2;
+        const distanceFromCenter = Math.abs(containerCenter - cardCenter);
+        const threshold = rect.height / 2;
+
+        if (distanceFromCenter < threshold) {
+            card.classList.add('active');
+            if (currentHechoIndex !== index) {
+                currentHechoIndex = index;
+                // Update mini globe
+                updateDesktopMiniGlobePosition(index);
+                // Sync other panels without re-syncing events
+                const currentHecho = prismaHechos[index];
+                if (currentHecho) {
+                    syncDesktopComparison(currentHecho);
+                    syncDesktopTimeline(currentHecho);
+                    document.getElementById('desktopEventTitle').textContent = currentHecho.macroevento || 'Evento';
+                    document.getElementById('desktopEventDate').textContent = currentHecho.date || '';
+                }
+            }
+        } else {
+            card.classList.remove('active');
+        }
+    });
+}
+
+async function syncDesktopTimeline(hecho) {
+    const timeline = document.getElementById('desktopVerticalTimeline');
+    const titleEl = document.getElementById('desktopTimelineTitle');
+    if (!timeline || !hecho) return;
+
+    const macroName = hecho.macroevento;
+    if (titleEl) titleEl.textContent = macroName || 'Línea Temporal';
+
+    if (!macroName || macroName === 'Sin clasificar') {
+        // Show current hechos as timeline
+        renderDesktopVerticalTimeline(prismaHechos, currentHechoIndex);
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/timeline/${encodeURIComponent(macroName)}?t=${Date.now()}`);
+        const hechos = await res.json();
+        const activeIdx = hechos.findIndex(h => h.id === hecho.id);
+        renderDesktopVerticalTimeline(hechos, activeIdx >= 0 ? activeIdx : 0);
+    } catch (e) {
+        console.error('Error syncing desktop timeline:', e);
+    }
+}
+
+function renderDesktopVerticalTimeline(hechos, activeIndex) {
+    const timeline = document.getElementById('desktopVerticalTimeline');
+    if (!timeline) return;
+
+    timeline.innerHTML = hechos.map((h, index) => `
+        <div class="timeline-node ${index === activeIndex ? 'active' : ''}" data-id="${h.id}">
+            <div class="timeline-node-content">
+                <h4>${h.id}</h4>
+                <span>${h.date || ''}</span>
+            </div>
+        </div>
+    `).join('');
+
+    // Click handler for timeline nodes
+    timeline.querySelectorAll('.timeline-node').forEach((node, index) => {
+        node.addEventListener('click', () => {
+            // Find in prismaHechos or inject
+            let matchIdx = prismaHechos.findIndex(ph => ph.id === hechos[index].id);
+            if (matchIdx < 0) {
+                prismaHechos.push({
+                    id: hechos[index].id,
+                    date: hechos[index].date,
+                    text: hechos[index].text || '',
+                    macroevento: document.getElementById('desktopTimelineTitle')?.textContent || 'Evento',
+                    newspapers: []
+                });
+                matchIdx = prismaHechos.length - 1;
+            }
+            currentHechoIndex = matchIdx;
+            syncDesktopPanels();
+
+            // Scroll events to this card
+            const eventsContainer = document.getElementById('desktopEventsContainer');
+            const card = eventsContainer?.querySelector(`[data-index="${matchIdx}"]`);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    });
+
+    // Scroll to active
+    setTimeout(() => {
+        const activeNode = timeline.querySelector('.timeline-node.active');
+        if (activeNode) activeNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+}
+
+function initDesktopMiniGlobe() {
+    const container = document.getElementById('desktopMiniGlobe');
+    if (!container || desktopMiniGlobeViz) return;
+
+    container.innerHTML = '';
+    const defaultMarker = [{ lat: 40.4168, lng: -3.7038, name: "ESPAÑA" }];
+
+    // Initial size from container (fallback to 450 if hidden/zero)
+    let initialWidth = container.clientWidth || 450;
+    let initialHeight = container.clientHeight || 450;
+
+    desktopMiniGlobeViz = Globe()
+        (container)
+        .backgroundColor('rgba(0,0,0,0)')
+        .globeImageUrl('./img/earth-blue-marble.jpg')
+        .bumpImageUrl('./img/earth-topology.png')
+        .width(initialWidth)
+        .height(initialHeight)
+        .showAtmosphere(true)
+        .atmosphereColor('lightskyblue')
+        .atmosphereAltitude(0.18)
+        .htmlElementsData(defaultMarker)
+        .htmlLat('lat')
+        .htmlLng('lng')
+        .htmlElement(d => {
+            const el = document.createElement('div');
+            el.className = 'mini-globe-marker';
+            el.innerHTML = '<div class="marker-dot pulse"></div>';
+            return el;
+        });
+
+    // Add clouds layer
+    const cloudTex = new THREE.TextureLoader().load('./img/earth-clouds.png');
+    const CLOUDS_ALT = 0.004;
+    const clouds = new THREE.Mesh(
+        new THREE.SphereGeometry(desktopMiniGlobeViz.getGlobeRadius() * (1 + CLOUDS_ALT), 75, 75),
+        new THREE.MeshPhongMaterial({ map: cloudTex, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+    );
+    desktopMiniGlobeViz.scene().add(clouds);
+
+    // Animate clouds
+    (function animateDesktopClouds() {
+        clouds.rotation.y += 0.0003;
+        requestAnimationFrame(animateDesktopClouds);
+    })();
+
+    desktopMiniGlobeViz.controls().enableZoom = false;
+    desktopMiniGlobeViz.controls().autoRotate = true;
+    desktopMiniGlobeViz.controls().autoRotateSpeed = 0.3;
+
+    // DYNAMIC RESIZING Support
+    const resizeObserver = new ResizeObserver(entries => {
+        for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            // Debounce or just update
+            if (width > 0 && height > 0) {
+                desktopMiniGlobeViz.width(width);
+                desktopMiniGlobeViz.height(height);
+            }
+        }
+    });
+    resizeObserver.observe(container);
+
+    // Position based on current event
+    if (prismaHechos.length > 0) {
+        updateDesktopMiniGlobePosition(currentHechoIndex);
+    }
+}
+
+function updateDesktopMiniGlobePosition(index) {
+    if (!desktopMiniGlobeViz || !prismaHechos[index]) return;
+
+    const hecho = prismaHechos[index];
+    const text = (hecho.text || '').toLowerCase();
+    const macro = (hecho.macroevento || '').toLowerCase();
+    const combined = text + ' ' + macro;
+
+    let lat = 40.4168, lng = -3.7038, locationName = "ESPAÑA";
+
+    if (combined.includes('sudán') || combined.includes('sudan')) {
+        lat = 15.8575; lng = 30.2176; locationName = "SUDÁN";
+    } else if (combined.includes('israel') || combined.includes('hamas') || combined.includes('gaza')) {
+        lat = 31.5; lng = 34.8; locationName = "ORIENTE MEDIO";
+    } else if (combined.includes('dana') || combined.includes('valencia')) {
+        lat = 39.4699; lng = -0.3763; locationName = "VALENCIA";
+    } else if (combined.includes('ucrania') || combined.includes('rusia')) {
+        lat = 50.4501; lng = 30.5234; locationName = "UCRANIA";
+    } else if (combined.includes('trump') || combined.includes('eeuu')) {
+        lat = 38.9072; lng = -77.0369; locationName = "EEUU";
+    }
+
+    desktopMiniGlobeViz.htmlElementsData([{ lat, lng, name: locationName }]);
+    desktopMiniGlobeViz.pointOfView({ lat, lng, alt: 0.5 }, 1000);
+}

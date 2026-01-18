@@ -12,10 +12,23 @@
     <script src="./vendor/lucide.min.js"></script>
 
     <!-- External Styles -->
-    <link rel="stylesheet" href="./styles.css?v=103">
+    <link rel="stylesheet" href="./styles.css?v=104">
 </head>
 
 <body>
+    <!-- GLOBAL Mode Toggle (Always Visible) -->
+    <div class="prisma-mode-toggle" id="globalModeToggle">
+        <button id="prismaModePhone" class="mode-btn" title="Phone Simulator">
+            <i data-lucide="smartphone"></i>
+        </button>
+        <button id="prismaModeDesktop" class="mode-btn active" title="Desktop View">
+            <i data-lucide="monitor"></i>
+        </button>
+        <button id="prismaModeGlobe" class="mode-btn" title="Globe View">
+            <i data-lucide="globe"></i>
+        </button>
+    </div>
+
     <!-- Globe Container -->
     <div id="globeViz"></div>
 
@@ -48,7 +61,7 @@
     </div>
 
     <!-- Prisma 3D View - Phone Simulator Mode -->
-    <div id="prismaSection" class="prisma-full-view" style="display: none;">
+    <div id="prismaSection" class="prisma-full-view desktop-mode">
         <!-- Phone device frame (simulator) -->
         <div class="phone-simulator">
             <div class="phone-device">
@@ -139,7 +152,68 @@
                 </div>
                 <!-- Home indicator bar -->
                 <div class="phone-home-bar"></div>
+        </div>
+        </div>
+
+        <!-- Desktop Layout (3-panel with dynamic focus) -->
+        <div class="prisma-desktop-layout">
+            <!-- Left Panel: Comparison -->
+            <div class="desktop-panel panel-comparison" data-panel="0">
+                <div class="face-header-fixed">
+                    <span class="face-tag">COMPARATIVA DE MEDIOS</span>
+                    <h2 id="desktopComparisonTitle">Selecciona un evento</h2>
+                </div>
+                <div class="comparison-columns">
+                    <div class="comparison-col" id="desktopColPais">
+                        <div class="col-header">
+                            <img src="./img/el_pais_icon.jpg" alt="El País"
+                                style="filter: none !important; height: 35px; width: auto; border-radius: 4px;">
+                        </div>
+                        <div class="col-articles"></div>
+                    </div>
+                    <div class="comparison-col" id="desktopColMundo">
+                        <div class="col-header">
+                            <img src="./img/el_mundo_icon.png" alt="El Mundo"
+                                style="filter: none !important; height: 35px; width: auto; border-radius: 4px;">
+                        </div>
+                        <div class="col-articles"></div>
+                    </div>
+                </div>
             </div>
+
+            <!-- Center Panel: Events Feed -->
+            <div class="desktop-panel panel-events focused" data-panel="1">
+                <div class="face-header-fixed">
+                    <span class="face-tag">EVENTOS DEL DÍA</span>
+                    <h2 id="desktopEventTitle">Cargando...</h2>
+                    <p id="desktopEventDate" class="face-subtitle"></p>
+                </div>
+                <div id="desktopMiniGlobeContainer" class="mini-globe-wrapper">
+                    <div id="desktopMiniGlobe"></div>
+                </div>
+                <div class="events-scroll-container" id="desktopEventsContainer">
+                    <!-- Events loaded by JS -->
+                </div>
+            </div>
+
+            <!-- Right Panel: Timeline -->
+            <div class="desktop-panel panel-timeline" data-panel="2">
+                <div class="face-header-fixed">
+                    <span class="face-tag">LÍNEA TEMPORAL</span>
+                    <h2 id="desktopTimelineTitle">Macroevento</h2>
+                </div>
+                <div class="vertical-timeline" id="desktopVerticalTimeline">
+                    <!-- Timeline events loaded by JS -->
+                </div>
+            </div>
+
+            <!-- Navigation arrows for desktop -->
+            <button class="desktop-nav desktop-nav-left" id="desktopNavLeft">
+                <i data-lucide="chevron-left"></i>
+            </button>
+            <button class="desktop-nav desktop-nav-right" id="desktopNavRight">
+                <i data-lucide="chevron-right"></i>
+            </button>
         </div>
     </div>
 
@@ -149,12 +223,6 @@
             <h1>Prisma Aletheia</h1>
             <div class="subtitle">Noticias de España</div>
         </div>
-
-        <nav class="main-nav">
-            <button id="viewGlobe" class="nav-btn active"><i data-lucide="globe"></i> Globo</button>
-            <button id="viewTimeline" class="nav-btn"><i data-lucide="clock"></i> Timeline</button>
-            <button id="viewPrisma" class="nav-btn"><i data-lucide="box"></i> Prisma</button>
-        </nav>
 
         <!-- Calendar -->
         <div class="calendar-container">
@@ -268,7 +336,7 @@
         </div>
     </div>
 
-    <script src="./script.js?v=9"></script>
+    <script src="./script.js?v=104"></script>
 </body>
 
 </html>

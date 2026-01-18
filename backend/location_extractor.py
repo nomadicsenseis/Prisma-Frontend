@@ -110,7 +110,9 @@ SPANISH_CITIES = {
     "singapur": {"lat": 1.3521, "lng": 103.8198},
     "sídney": {"lat": -33.8688, "lng": 151.2093},
     "melbourne": {"lat": -37.8136, "lng": 144.9631},
-}
+    "sudán": {"lat": 15.8575, "lng": 30.2176},
+    "áfrica": {"lat": 1.6508, "lng": 24.2155},
+}   
 
 def extract_location_from_text(title, content):
     """

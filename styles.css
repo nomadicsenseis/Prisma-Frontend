@@ -31,13 +31,13 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 1;
+    z-index: 50; /* Higher than panels but below mode toggle (9999) */
 }
 
 /* Panels */
 .panel {
     position: absolute;
-    z-index: 10;
+    z-index: 60; /* Higher than globeViz (50) */
     background: var(--panel-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -2127,4 +2127,533 @@ input[type="range"]::-webkit-slider-thumb {
         border-radius: 12px;
         padding: 5px;
     }
+}
+
+/* =========================================
+   PRISMA DESKTOP MODE
+   ========================================= */
+
+/* Mode Toggle Button */
+.prisma-mode-toggle {
+    position: fixed; /* Always visible regardless of container visibility */
+    top: 30px;
+    right: 30px;
+    z-index: 9999; /* Above everything */
+    display: flex;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.8);
+    padding: 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(62, 171, 247, 0.25);
+    backdrop-filter: blur(15px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    pointer-events: auto !important; /* CRITICAL: Ensure clicks are received */
+}
+
+.mode-btn {
+    width: 48px;
+    height: 48px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mode-btn:hover {
+    color: var(--accent-color);
+    background: rgba(62, 171, 247, 0.1);
+    border-color: rgba(62, 171, 247, 0.3);
+}
+
+.mode-btn.active {
+    color: white;
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 20px rgba(62, 171, 247, 0.4);
+}
+
+.mode-btn i {
+    width: 24px;
+    height: 24px;
+}
+
+/* Desktop Layout Container - Full Immersion */
+.prisma-desktop-layout {
+    display: none; /* Hidden by default (Phone mode) */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+
+    /* VIGNETTE border instead of physical border */
+    background: transparent;
+    box-shadow: inset 0 0 150px rgba(0, 0, 0, 0.9);
+
+    /* Layout */
+    overflow: hidden;
+    padding: 0;
+    gap: 0;
+
+    /* 3D Perspective for Carousel */
+    perspective: 1500px;
+}
+
+/* Base Phone Frame visibility */
+.phone-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* DESKTOP MODE ACTIVE STATE */
+#prismaSection.desktop-mode {
+    display: block !important; /* CRITICAL: Override inline display:none */
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    padding-top: 80px !important; /* Room for mode toggle */
+    max-width: none !important;
+    max-height: none !important;
+    z-index: 100;
+    background: black; /* Ensure background is solid */
+    box-sizing: border-box !important;
+}
+
+#prismaSection.desktop-mode .phone-frame {
+    display: none !important;
+}
+
+#prismaSection.desktop-mode .prisma-desktop-layout {
+    display: flex !important; /* Show Desktop Layout */
+}
+
+/* Show desktop layout when mode is active */
+.prisma-full-view.desktop-mode .phone-simulator {
+    display: none;
+}
+
+.prisma-full-view.desktop-mode .prisma-desktop-layout {
+    display: flex;
+}
+
+/* Desktop Panel - Sections of the unified surface */
+.desktop-panel {
+    position: relative;
+    flex: 1;
+    min-width: 10%;
+    height: 100%;
+    min-height: 100vh; /* Force visibility */
+
+    background: rgba(10, 20, 40, 0.9); /* Debug: Visible dark background */
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    /* Subtle vertical division */
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+
+    /* Smooth fluid transition */
+    transition: flex 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.5s ease;
+}
+
+.desktop-panel:last-child {
+    border-right: none;
+}
+
+/* Focused Section (Center) */
+.desktop-panel.focused {
+    flex: 4;
+    /* Dominant space */
+    background: radial-gradient(circle at center, rgba(62, 171, 247, 0.03) 0%, transparent 60%);
+    z-index: 10;
+    transform: translateZ(0);
+    /* Bring to front logically */
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+    /* Lift it up */
+}
+
+/* Left Section */
+.desktop-panel.left {
+    transform-origin: right center;
+    transform: scale(0.95);
+    /* Subtle scale only, no rotation */
+    filter: brightness(0.6) blur(1px);
+    /* More focus separation */
+    z-index: 1;
+    opacity: 0.8;
+}
+
+/* Right Section */
+.desktop-panel.right {
+    transform-origin: left center;
+    transform: scale(0.95);
+    filter: brightness(0.6) blur(1px);
+    z-index: 1;
+    opacity: 0.8;
+}
+
+/* Unfocused Sections */
+.desktop-panel:not(.focused) {
+    flex: 0.8;
+    /* Collapsed state */
+    cursor: pointer;
+}
+
+.desktop-panel:not(.focused):hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Content opacity transition for polish */
+.desktop-panel>* {
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.desktop-panel:not(.focused) .comparison-columns,
+.desktop-panel:not(.focused) .timeline-node-content span,
+.desktop-panel:not(.focused) .event-tag {
+    opacity: 0.3;
+}
+
+/* Remove the top glow line - cleaner look */
+.desktop-panel::before {
+    display: none;
+}
+
+/* Desktop panel header */
+.desktop-panel .face-header-fixed {
+    padding: 30px 30px 20px 30px !important;
+    background: transparent !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    box-shadow: none !important;
+}
+
+/* Right panel (Timeline) needs extra top padding to not overlap toggle */
+.desktop-panel.panel-timeline .face-header-fixed,
+.desktop-panel.right .face-header-fixed {
+    padding-top: 100px !important; /* Clear space for mode toggle */
+}
+
+.desktop-panel:not(.focused) .face-header-fixed {
+    padding: 30px 15px 20px 15px !important;
+    text-align: center;
+}
+
+/* Headers in collapsed state */
+.desktop-panel:not(.focused) .face-header-fixed h2 {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.7;
+}
+
+.desktop-panel:not(.focused) .face-tag {
+    display: none;
+    /* Reduce visual noise */
+}
+
+
+/* Comparison columns */
+.desktop-panel .comparison-columns {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    background: transparent;
+}
+
+.desktop-panel .comparison-col {
+    background: transparent;
+    border-right: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.desktop-panel .comparison-col:last-child {
+    border-right: none;
+}
+
+.desktop-panel:not(.focused) .comparison-columns {
+    flex-direction: column;
+}
+
+.desktop-panel:not(.focused) .comparison-col {
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+
+/* Events scroll container */
+.desktop-panel .events-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 40px 30px 40px;
+
+    /* Custom Scrollbar for cleaner look */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(62, 171, 247, 0.3) transparent;
+}
+
+.desktop-panel:not(.focused) .events-scroll-container {
+    padding: 0 10px;
+    opacity: 0.5;
+    /* Dim content in collapsed state */
+}
+
+/* Event cards */
+.desktop-panel .event-card {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 0;
+    padding: 25px 10px;
+    margin: 0;
+}
+
+.desktop-panel .event-card.active {
+    background: rgba(62, 171, 247, 0.06);
+    /* Very subtle highlight */
+    padding-left: 20px;
+    border-left: 3px solid var(--accent-color);
+}
+
+
+/* Mini globe wrapper */
+.desktop-panel .mini-globe-wrapper {
+    width: 100%;
+    height: 450px;
+    /* Even Taller area */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+
+    background: radial-gradient(circle at center, rgba(62, 171, 247, 0.05) 0%, transparent 60%);
+}
+
+.desktop-panel:not(.focused) .mini-globe-wrapper {
+    height: 150px;
+    background: transparent;
+    transform: scale(0.6);
+}
+
+
+
+/* --------------------------------------------------------- */
+/* SPLIT SCREEN LAYOUT (Feature: desktop-split-layout) */
+/* --------------------------------------------------------- */
+
+/* Events Panel Grid Layout (When Focused) */
+.desktop-panel.panel-events.focused {
+    display: grid !important;
+    /* Force Grid */
+    grid-template-rows: auto 1fr;
+    grid-template-columns: 1fr 1fr;
+    /* 50% Text, 50% Globe */
+    grid-template-areas:
+        "header header"
+        "text globe";
+    gap: 0;
+    padding: 0;
+}
+
+.desktop-panel.panel-events.focused .face-header-fixed {
+    grid-area: header;
+    position: relative;
+    /* Not absolute relative to whole panel anymore, but in grid flow */
+    width: 100%;
+    z-index: 10;
+}
+
+.desktop-panel.panel-events.focused .events-scroll-container {
+    grid-area: text;
+    position: relative;
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    padding: 20px 40px;
+    margin-top: 0;
+    /* Removing absolute positioning margin */
+    /* Ensure text is readable */
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.3), transparent);
+    order: 1;
+    /* Ensure left */
+    transform: translateY(-4vh);
+    /* Nudge up for optical centering */
+}
+
+.desktop-panel.panel-events.focused .mini-globe-wrapper {
+    grid-area: globe;
+    position: relative;
+    /* Reset from absolute */
+    top: auto;
+    left: auto;
+    width: 100%;
+    height: 100% !important;
+    /* Fill grid height */
+    max-height: 100vh;
+    /* Prevent overflow */
+    transform: translateY(-4vh);
+    /* Nudge up for optical centering */
+    /* Reset center translate handled by grid but we add nudge */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    order: 2;
+    /* Ensure right */
+    background: transparent;
+    /* Clean bg for globe */
+}
+
+/* Ensure globe canvas fits constraints */
+.desktop-panel.panel-events.focused .mini-globe-wrapper canvas {
+    max-width: 100%;
+    max-height: 90vh;
+    /* Massive globe as requested */
+    object-fit: contain;
+}
+
+/* --------------------------------------------------------- */
+
+
+/* Timeline */
+.desktop-panel .vertical-timeline {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 40px;
+}
+
+.desktop-panel .timeline-node {
+    display: flex;
+    /* Flex layout for node + content */
+    align-items: flex-start;
+    /* Align to top */
+    gap: 20px;
+    /* Clear gap between icon and text */
+    padding: 20px 25px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    margin-left: 10px;
+    background: transparent;
+    position: relative;
+}
+
+/* The diamond icon simulation if it's css, or the content adjustment */
+.desktop-panel .timeline-node::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    /* Position on the border line */
+    top: 28px;
+    /* Align with first line of text roughly */
+    width: 9px;
+    height: 9px;
+    background: #0f172a;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    transform: rotate(45deg);
+    transition: all 0.3s ease;
+}
+
+.desktop-panel .timeline-node:hover::before {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+}
+
+.desktop-panel .timeline-node.active::before {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    box-shadow: 0 0 10px var(--accent-color);
+}
+
+.desktop-panel .timeline-node-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.desktop-panel .timeline-node h4 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.desktop-panel .timeline-node span {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.desktop-panel .timeline-node:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-left-color: var(--accent-color);
+}
+
+.desktop-panel .timeline-node.active {
+    background: rgba(62, 171, 247, 0.08);
+    border-left: 2px solid var(--accent-color);
+}
+
+.desktop-panel:not(.focused) .vertical-timeline {
+    padding: 10px;
+    opacity: 0.6;
+}
+
+
+/* Desktop Navigation Arrows - Positioned outside container or floating */
+/* Desktop Navigation Arrows - Edge of screen */
+.desktop-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 200;
+
+    width: 60px;
+    height: 100px;
+    /* Taller touch area */
+
+    /* transparent */
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.desktop-nav:hover {
+    background: radial-gradient(ellipse at center, rgba(62, 171, 247, 0.1) 0%, transparent 70%);
+    color: var(--accent-color);
+}
+
+.desktop-nav i {
+    width: 40px;
+    height: 40px;
+    filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
+}
+
+.desktop-nav-left {
+    left: 0;
+}
+
+.desktop-nav-right {
+    right: 0;
+}
+
+/* Clean up hints */
+.desktop-panel .face-hint {
+    display: none;
 }

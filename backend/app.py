@@ -174,6 +174,7 @@ def get_recent_hechos():
     WITH h, 
          collect(DISTINCT p.nombre) as newspapers, 
          max(COALESCE(f.fecha, a.fecha)) as latestDate
+    WHERE latestDate <= '2025-08-30'
     OPTIONAL MATCH (h)-[:PARTE_DE]->(m:EventoMacro)
     RETURN h.nombre as id, 
            COALESCE(h.fecha, latestDate) as date, 
