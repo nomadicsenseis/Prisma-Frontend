@@ -913,7 +913,6 @@ function renderPrismaEvents(hechos) {
 
     container.innerHTML = hechos.map((h, index) => `
         <div class="event-card ${index === currentHechoIndex ? 'active' : ''}" data-index="${index}">
-            <span class="event-tag">DATOS DEL HECHO</span>
             <h3>${h.id}</h3>
             <p>${h.text}</p>
             <div class="event-date">${h.date || ''}</div>
@@ -1323,6 +1322,8 @@ function initMiniGlobe() {
     miniGlobeViz.controls().enableZoom = false;
     miniGlobeViz.controls().autoRotate = true;
     miniGlobeViz.controls().autoRotateSpeed = 0.3;
+    // Increase sensitivity for "lighter" feel
+    miniGlobeViz.controls().rotateSpeed = 3.5;
     miniGlobeViz.pointOfView({ lat: 40.4168, lng: -3.7038, alt: 0.5 });
 }
 
@@ -1429,10 +1430,20 @@ function initPrisma() {
             isScrolling = false;
             isIgnoreInteraction = false;
 
-            // CHECK IGNORE ZONES (Globe, Canvas)
-            if (e.target.closest('#miniGlobe') || e.target.closest('.mini-globe-wrapper') || e.target.tagName === 'CANVAS') {
-                isIgnoreInteraction = true;
-                return;
+            // ROBUST HIT TESTING (Raycast)
+            // We use elementFromPoint to find exactly what is under the finger, 
+            // bypassing potential event targeting issues on 3D elements.
+            const actualTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+
+            if (actualTarget) {
+                // IGNORE GLOBE ZONES
+                // Considers: The Canvas, the Wrapper, or any child of wrapper
+                if (actualTarget.closest('#miniGlobe') ||
+                    actualTarget.closest('.mini-globe-wrapper') ||
+                    actualTarget.tagName === 'CANVAS') {
+                    isIgnoreInteraction = true;
+                    return;
+                }
             }
 
             // Do NOT disable transition yet. Wait until we confirm horizontal drag.
@@ -1449,15 +1460,23 @@ function initPrisma() {
 
             // Axis Locking Logic (First Move Decision)
             if (!isDragging) {
-                // If moving vertically...
-                if (Math.abs(diffY) > Math.abs(diffX)) {
+                const absX = Math.abs(diffX);
+                const absY = Math.abs(diffY);
+                const totalDist = Math.sqrt(absX * absX + absY * absY);
+
+                // Ignore micro-movements (jitter)
+                if (totalDist < 5) return;
+
+                // Priority to Vertical Scroll
+                // If moving vertically significantly, or just more than horizontally
+                if (absY > absX) {
                     isScrolling = true; // Lock as scroll
                     return; // EXIT and let browser scroll
                 }
 
-                // If moving horizontally (Must exceed threshold)
-                // Threshold 15px to allow intended vertical scrolls to not trigger rotation
-                if (Math.abs(diffX) > 15) {
+                // If moving horizontally (Must exceed slightly higher threshold)
+                // Threshold 10px to prevent accidental swipes
+                if (absX > 10) {
                     isDragging = true;
                     prisma.style.transition = 'none'; // NOW disable transition for 1:1 control
                 }
