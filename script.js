@@ -2132,6 +2132,19 @@ document.addEventListener('touchend', e => {
     handleSwipe();
 }, { passive: true });
 
+// Mouse support for desktop
+document.addEventListener('mousedown', e => {
+    touchStartX = e.screenX;
+    touchStartY = e.screenY;
+    touchStartElement = e.target;
+});
+
+document.addEventListener('mouseup', e => {
+    touchEndX = e.screenX;
+    touchEndY = e.screenY;
+    handleSwipe();
+});
+
 function handleSwipe() {
     // Only handle swipe in Phone Mode
     if (currentViewMode !== 'phone') return;

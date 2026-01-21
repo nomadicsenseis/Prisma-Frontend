@@ -185,7 +185,9 @@ El sistema extrae ubicaciones del título y contenido de los artículos para pos
 - [ ] Relaciones SIGUE_A entre hechos (causalidad)
 - [ ] Optimización para grandes volúmenes de datos
 - [ ] Página "Sobre nosotros" y "Fuentes"
-- [ ] Responsive design para dispositivos móviles
+- [x] Responsive design para dispositivos móviles
+- [x] Soporte táctil para iOS/Android con gestos de swipe
+- [x] Simulador de móvil en modo escritorio para testing
 
 ---
 

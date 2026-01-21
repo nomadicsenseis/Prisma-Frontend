@@ -1844,10 +1844,19 @@ input[type="range"]::-webkit-slider-thumb {
     transform: translateY(0);
 }
 
-.prisma.rotating {
-    transform-style: preserve-3d;
-    scale: 0.85;
-    /* Shrink slightly during rotation for depth */
+/* Only apply 3D rotation effects on desktop */
+@media (min-width: 769px) {
+    .prisma.rotating {
+        transform-style: preserve-3d;
+        scale: 0.85;
+        /* Shrink slightly during rotation for depth */
+    }
+}
+
+/* Phone mode: no scale effect during transition */
+.phone-screen .prisma.rotating {
+    scale: 1 !important;
+    transform-style: flat !important;
 }
 
 .event-card h3 {
