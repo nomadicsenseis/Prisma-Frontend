@@ -1536,12 +1536,20 @@ input[type="range"]::-webkit-slider-thumb {
     padding: 0 !important;
     width: 100% !important;
     height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
     margin: 0 !important;
-    left: 0 !important;
-    margin: 0 !important;
+    transform-style: flat !important;
+}
+
+.phone-screen .prisma {
+    width: 100% !important;
+    height: 100% !important;
+    transform: none !important;
+    transform-style: flat !important;
 }
 
 .phone-screen .prisma-face {
@@ -1555,26 +1563,34 @@ input[type="range"]::-webkit-slider-thumb {
     border: none !important;
     box-shadow: none !important;
 
-    /* PURE opacity crossfade - NO transforms */
-    opacity: 0;
-    visibility: hidden;
+    /* HORIZONTAL SLIDE - faces slide left/right */
+    opacity: 1 !important;
+    /* All faces visible */
     pointer-events: none;
-    transition: opacity 0.2s ease-out, visibility 0.2s ease-out;
     z-index: 1;
-    transform: none !important;
+    transform: translateX(100%);
+    /* Default: off to the right */
+    transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+    /* Disable expensive effects on mobile */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    will-change: transform;
 }
 
 .phone-screen .prisma-face.active {
-    opacity: 1;
-    visibility: visible;
     pointer-events: auto;
     z-index: 10;
-    transform: none !important;
+    transform: translateX(0) !important;
+    /* Centered */
 }
 
-/* Non-active faces - no transform */
-.phone-screen .prisma-face:not(.active) {
-    transform: none !important;
+/* Use data attributes to control slide direction */
+.phone-screen .prisma-face.slide-left {
+    transform: translateX(-100%) !important;
+}
+
+.phone-screen .prisma-face.slide-right {
+    transform: translateX(100%) !important;
 }
 
 /* Hide navigation arrows inside phone screen */
@@ -1619,20 +1635,19 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 /* Position faces in 3D space - triangular prism */
-/* Position faces in 3D space - triangular prism */
-/* Using !important to ensure 3D structure persists even in phone mode if desired */
-/* Position faces in 3D space - triangular prism */
-/* Using !important to ensure 3D structure persists even in phone mode if desired */
-.face-comparison {
-    transform: rotateY(0deg) translateZ(195px) !important;
-}
+/* ONLY apply 3D transforms on desktop screens */
+@media (min-width: 769px) {
+    .face-comparison {
+        transform: rotateY(0deg) translateZ(195px);
+    }
 
-.face-events {
-    transform: rotateY(120deg) translateZ(195px) !important;
-}
+    .face-events {
+        transform: rotateY(120deg) translateZ(195px);
+    }
 
-.face-timeline {
-    transform: rotateY(240deg) translateZ(195px) !important;
+    .face-timeline {
+        transform: rotateY(240deg) translateZ(195px);
+    }
 }
 
 /* Face Header - 'Aletheia Blade' Style */
@@ -2782,23 +2797,22 @@ input[type="range"]::-webkit-slider-thumb {
     .phone-screen .prisma-face.face-comparison,
     .phone-screen .prisma-face.face-events,
     .phone-screen .prisma-face.face-timeline {
-        /* Reset the 3D positioning */
         backface-visibility: visible !important;
+        opacity: 1 !important;
+        /* All faces visible for horizontal slide */
     }
 
-    /* Inactive faces slide out to left */
-    .phone-screen .prisma-face.face-comparison:not(.active),
-    .phone-screen .prisma-face.face-events:not(.active),
-    .phone-screen .prisma-face.face-timeline:not(.active) {
-        transform: translateX(-30%) !important;
-        opacity: 0 !important;
+    /* Position faces based on slide direction classes */
+    .phone-screen .prisma-face.slide-left {
+        transform: translateX(-100%) !important;
+    }
+
+    .phone-screen .prisma-face.slide-right {
+        transform: translateX(100%) !important;
     }
 
     /* Active face is centered */
-    .phone-screen .prisma-face.face-comparison.active,
-    .phone-screen .prisma-face.face-events.active,
-    .phone-screen .prisma-face.face-timeline.active {
+    .phone-screen .prisma-face.active {
         transform: translateX(0) !important;
-        opacity: 1 !important;
     }
 }

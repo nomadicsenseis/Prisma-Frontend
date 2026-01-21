@@ -785,8 +785,21 @@ function rotatePrismaTo(faceIndex) {
         dot.classList.toggle('active', idx === normalizedIndex);
     });
 
-    document.querySelectorAll('.prisma-face').forEach((face, idx) => {
-        face.classList.toggle('active', idx === normalizedIndex);
+    // For mobile: Apply slide direction classes for horizontal slide effect
+    const faces = document.querySelectorAll('.prisma-face');
+    faces.forEach((face, idx) => {
+        // Remove all state classes first
+        face.classList.remove('active', 'slide-left', 'slide-right');
+
+        if (idx === normalizedIndex) {
+            face.classList.add('active');
+        } else if (idx < normalizedIndex) {
+            // Faces before active slide to the left
+            face.classList.add('slide-left');
+        } else {
+            // Faces after active slide to the right
+            face.classList.add('slide-right');
+        }
     });
 
     // Remove rotating class after transition
