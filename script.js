@@ -825,31 +825,7 @@ function rotatePrismaRight() {
     rotatePrismaTo(currentPrismaFace + 1);
 }
 
-// Swipe detection for prisma
-let prismaStartX = 0;
-let prismaStartY = 0;
-const SWIPE_THRESHOLD = 50;
 
-function handlePrismaTouchStart(e) {
-    const touch = e.touches ? e.touches[0] : e;
-    prismaStartX = touch.clientX;
-    prismaStartY = touch.clientY;
-}
-
-function handlePrismaTouchEnd(e) {
-    const touch = e.changedTouches ? e.changedTouches[0] : e;
-    const deltaX = touch.clientX - prismaStartX;
-    const deltaY = touch.clientY - prismaStartY;
-
-    // Detect horizontal swipes - handle a minimum distance and check horizontal vs vertical
-    if (Math.abs(deltaX) > SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-        if (deltaX > 0) {
-            rotatePrismaLeft(); // Swipe right -> go to previous face
-        } else {
-            rotatePrismaRight(); // Swipe left -> go to next face
-        }
-    }
-}
 
 // Fetch recent hechos for prisma events face
 async function fetchPrismaHechos() {
