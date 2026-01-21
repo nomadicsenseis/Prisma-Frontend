@@ -758,6 +758,37 @@ const prismaNavRight = document.getElementById('prismaNavRight');
 
 // Rotation angles - use cumulative rotation to avoid "long way around"
 let prismaRotation = 0;  // Current cumulative rotation in degrees
+let prismaRadius = 112; // Default, updated dynamically
+
+function updatePrismaGeometry() {
+    const container = document.querySelector('.prisma-container');
+    if (!container) return;
+
+    // Get actual width - on mobile this will be the phone screen width (~390px)
+    const width = container.offsetWidth;
+
+    // Calculate Apothem (distance from center to face) for equilateral triangle
+    // r = width / (2 * tan(60)) = width / 3.464
+    let r = Math.round(width / 3.464);
+
+    // FAILSAFE: Ensure radius is never 0 or too small (default to ~90px for safe mobile 3D)
+    // If r is too small, the faces will collapse onto each other.
+    if (r < 90) r = 90;
+
+    prismaRadius = r;
+
+    // Apply to container as CSS variable for styles.css to use
+    container.style.setProperty('--prisma-tz', `${r}px`);
+    // Also set width variable for faces to match calculation
+    container.style.setProperty('--prisma-width', `${Math.round(width)}px`);
+
+    console.log(`📐 Prisma Geometry Updated: EffWidth=${width}px, Radius=${r}px`);
+}
+
+// Call on resize and init
+window.addEventListener('resize', () => {
+    setTimeout(updatePrismaGeometry, 100);
+});
 
 function rotatePrismaTo(faceIndex) {
     const prisma = document.querySelector('.prisma');
@@ -765,6 +796,9 @@ function rotatePrismaTo(faceIndex) {
 
     // Add rotating class for depth effect
     prisma.classList.add('rotating');
+
+    // Ensure transition is ON (drag might have turned it off)
+    prisma.style.transition = 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)';
 
     currentPrismaFace = faceIndex;
     const targetAngle = -faceIndex * 120;
@@ -774,32 +808,21 @@ function rotatePrismaTo(faceIndex) {
     const diff = ((targetAngle - currentAngle) % 360 + 540) % 360 - 180;
     prismaRotation += diff;
 
-    // Only apply 3D rotation on desktop - mobile uses CSS-based 2D sliding
-    if (window.innerWidth >= 768) {
-        prisma.style.transform = `rotateY(${prismaRotation}deg)`;
-    }
+    // Apply 3D rotation (Enabled for ALL devices now)
+    // We translateZ(-radius) to push the axis back, so the active face (at +radius) is at Z=0 (screen plane)
+    prisma.style.transform = `translateZ(-${prismaRadius}px) rotateY(${prismaRotation}deg)`;
 
-    // Update active face class (for phone mode visibility)
+    // Update active face class (for phone mode visibility/logic)
     const normalizedIndex = ((faceIndex % 3) + 3) % 3;
     document.querySelectorAll('.face-dot').forEach((dot, idx) => {
         dot.classList.toggle('active', idx === normalizedIndex);
     });
 
-    // For mobile: Apply slide direction classes for horizontal slide effect
+    // Remove legacy slide classes (cleaning up just in case)
     const faces = document.querySelectorAll('.prisma-face');
     faces.forEach((face, idx) => {
-        // Remove all state classes first
         face.classList.remove('active', 'slide-left', 'slide-right');
-
-        if (idx === normalizedIndex) {
-            face.classList.add('active');
-        } else if (idx < normalizedIndex) {
-            // Faces before active slide to the left
-            face.classList.add('slide-left');
-        } else {
-            // Faces after active slide to the right
-            face.classList.add('slide-right');
-        }
+        if (idx === normalizedIndex) face.classList.add('active');
     });
 
     // Remove rotating class after transition
@@ -807,13 +830,25 @@ function rotatePrismaTo(faceIndex) {
         prisma.classList.remove('rotating');
     }, 600); // Match CSS transition duration
 
-    // Load data for specific face if needed
-    // Load data for specific face if needed
-    // Load data for specific face if needed
-    if (normalizedIndex === 0) {
-        loadPrismaComparison(prismaHechos[currentHechoIndex]);
-    } else if (normalizedIndex === 2) {
-        loadPrismaMacroTimeline();
+    // Load data for specific face if needed (AVOID RELOADING if already visible)
+    // We check if the content is actually empty or if we switched faces
+    const isComparisonFace = normalizedIndex === 0;
+    const isTimelineFace = normalizedIndex === 2;
+
+    // Simple check: Only load if the face container is empty or we explicitly switched context
+    // Ideally we would track 'lastLoadedFace', but checking innerHTML emptiness is robust enough for now
+    if (isComparisonFace) {
+        const colPais = document.querySelector('#prismaColPais .col-articles');
+        // Only load if empty or if we really need to refresh (which usually happens via other triggers)
+        // For pure rotation snapping, we skip if already populated.
+        if (colPais && (!colPais.children.length || colPais.querySelector('.spinner'))) {
+            loadPrismaComparison(prismaHechos[currentHechoIndex]);
+        }
+    } else if (isTimelineFace) {
+        const timeline = document.getElementById('verticalTimeline');
+        if (timeline && (!timeline.children.length || timeline.querySelector('.spinner'))) {
+            loadPrismaMacroTimeline();
+        }
     }
 }
 
@@ -1362,8 +1397,126 @@ function initPrisma() {
         });
     }
 
-    // Swipe gestures are now handled by document-level handler at bottom of file
-    // (handles globe exclusion and correct direction)
+    // --- 1:1 DIRECT TOUCH MANIPULATION (AXIS-LOCKED V3.1) ---
+    // Solves "Scroll vs Rotate" + "Globe Block" by using explicit state flags.
+    const prismaContainer = document.querySelector('.prisma-container');
+    const prisma = document.querySelector('.prisma');
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let currentRotationAtStart = 0;
+    let startFaceIndex = 0;
+
+    // State Flags
+    let isDragging = false;
+    let isScrolling = false; // Vertical scroll lock
+    let isIgnoreInteraction = false; // Locked out (e.g. globe)
+
+    if (prismaContainer && prisma) {
+        prismaContainer.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) return;
+
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+
+            // TRACKING START
+            currentRotationAtStart = prismaRotation;
+            startFaceIndex = currentPrismaFace;
+
+            // RESET ALL FLAGS
+            isDragging = false;
+            isScrolling = false;
+            isIgnoreInteraction = false;
+
+            // CHECK IGNORE ZONES (Globe, Canvas)
+            if (e.target.closest('#miniGlobe') || e.target.closest('.mini-globe-wrapper') || e.target.tagName === 'CANVAS') {
+                isIgnoreInteraction = true;
+                return;
+            }
+
+            // Do NOT disable transition yet. Wait until we confirm horizontal drag.
+        }, { passive: true });
+
+        prismaContainer.addEventListener('touchmove', (e) => {
+            // STRICT GATES
+            if (isIgnoreInteraction) return; // Globe is active, do nothing
+            if (isScrolling) return; // Vertical scroll is active, let browser handle it
+
+            const touch = e.touches[0];
+            const diffX = touch.clientX - touchStartX;
+            const diffY = touch.clientY - touchStartY;
+
+            // Axis Locking Logic (First Move Decision)
+            if (!isDragging) {
+                // If moving vertically...
+                if (Math.abs(diffY) > Math.abs(diffX)) {
+                    isScrolling = true; // Lock as scroll
+                    return; // EXIT and let browser scroll
+                }
+
+                // If moving horizontally (Must exceed threshold)
+                // Threshold 15px to allow intended vertical scrolls to not trigger rotation
+                if (Math.abs(diffX) > 15) {
+                    isDragging = true;
+                    prisma.style.transition = 'none'; // NOW disable transition for 1:1 control
+                }
+            }
+
+            // ACTUAL DRAG LOGIC
+            if (isDragging) {
+                // We are controlling rotation. Prevent browser navigation/scroll.
+                if (e.cancelable) e.preventDefault();
+
+                // VISUAL PHYSICS:
+                // Swipe Left (diffX < 0) -> Content moves Left -> Rotation DECREASES (CW)
+                // Swipe Right (diffX > 0) -> Content moves Right -> Rotation INCREASES (CCW)
+                const rotationDelta = diffX * 0.4;
+                const newRotation = currentRotationAtStart + rotationDelta;
+
+                prisma.style.transform = `translateZ(-${prismaRadius}px) rotateY(${newRotation}deg)`;
+            }
+        }, { passive: false }); // passive: false needed for e.preventDefault()
+
+        prismaContainer.addEventListener('touchend', (e) => {
+            if (isIgnoreInteraction) {
+                isIgnoreInteraction = false;
+                return;
+            }
+            if (isScrolling) {
+                isScrolling = false;
+                return;
+            }
+
+            if (!isDragging) return;
+
+            isDragging = false;
+
+            const diffX = e.changedTouches[0].clientX - touchStartX;
+
+            // Restore animation
+            prisma.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+            let targetIndex = startFaceIndex;
+
+            // SNAP LOGIC
+            // Swipe Left (diffX < -60) -> Next Face (index + 1)
+            if (diffX < -60) {
+                targetIndex = startFaceIndex + 1;
+            }
+            // Swipe Right (diffX > 60) -> Previous Face (index - 1)
+            else if (diffX > 60) {
+                targetIndex = startFaceIndex - 1;
+            }
+            // Else snap back to start
+
+            // Sync global rotation to visual drift to prevent jumping
+            prismaRotation = currentRotationAtStart + (diffX * 0.4);
+
+            rotatePrismaTo(targetIndex);
+        });
+
+    }
 
     // Face indicator dot clicks
     document.querySelectorAll('.face-dot').forEach(dot => {
@@ -1444,8 +1597,25 @@ window.addEventListener('load', async () => {
 
     // Initialize Prisma
     initPrisma();
-    // Set initial active face to 1 (Events/Center)
-    rotatePrismaTo(1);
+
+    // Calculate geometry immediately
+    updatePrismaGeometry();
+
+    // Set initial active face to 1 (Events/Center) WITHOUT animation for the first frame
+    const prisma = document.querySelector('.prisma');
+    if (prisma) {
+        prisma.style.transition = 'none'; // pivot instantly
+        rotatePrismaTo(1);
+
+        // Force reflow
+        void prisma.offsetWidth;
+
+        // Restore transition and fade in
+        setTimeout(() => {
+            prisma.style.transition = 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)';
+            prisma.classList.add('loaded'); // Add class to trigger opacity fade-in
+        }, 50);
+    }
 
     // Initialize Desktop Mode listeners
     initDesktopMode();
@@ -1659,6 +1829,9 @@ function switchPrismaMode(mode) {
     // Initialize Phone Mode with mini-globe
     if (mode === 'phone') {
         prismaSection.style.display = 'block';
+        // Recalculate geometry for the phone container width
+        setTimeout(updatePrismaGeometry, 50);
+
         initMiniGlobe(); // Initialize mini-globe for phone mode
         if (prismaHechos.length === 0) {
             fetchPrismaHechos();
@@ -2087,63 +2260,4 @@ window.addEventListener('resize', () => {
     resizeTimeout = setTimeout(checkMobileMode, 200);
 });
 
-// =========================================
-// MOBILE SWIPE GESTURES
-// =========================================
-let touchStartX = 0;
-let touchStartY = 0;
-let touchEndX = 0;
-let touchEndY = 0;
-let touchStartElement = null;
 
-document.addEventListener('touchstart', e => {
-    touchStartX = e.changedTouches[0].screenX;
-    touchStartY = e.changedTouches[0].screenY;
-    touchStartElement = e.target;
-}, { passive: true });
-
-document.addEventListener('touchend', e => {
-    touchEndX = e.changedTouches[0].screenX;
-    touchEndY = e.changedTouches[0].screenY;
-    handleSwipe();
-}, { passive: true });
-
-// Mouse support for desktop
-document.addEventListener('mousedown', e => {
-    touchStartX = e.screenX;
-    touchStartY = e.screenY;
-    touchStartElement = e.target;
-});
-
-document.addEventListener('mouseup', e => {
-    touchEndX = e.screenX;
-    touchEndY = e.screenY;
-    handleSwipe();
-});
-
-function handleSwipe() {
-    // Only handle swipe in Phone Mode
-    if (currentViewMode !== 'phone') return;
-
-    // Don't handle swipe if it started on the globe
-    if (touchStartElement && touchStartElement.closest('#miniGlobe, #miniGlobeContainer, .mini-globe-wrapper, canvas')) {
-        return;
-    }
-
-    const diffX = touchStartX - touchEndX;
-    const diffY = touchStartY - touchEndY;
-    const threshold = 60; // minimum distance for swipe
-
-    // Check if horizontal swipe dominates (to avoid interfering with scroll)
-    if (Math.abs(diffX) > Math.abs(diffY)) {
-        if (Math.abs(diffX) > threshold) {
-            if (diffX > 0) {
-                // Swipe Left -> Next Face (natural: swipe left to go forward)
-                rotatePrismaTo(currentPrismaFace + 1);
-            } else {
-                // Swipe Right -> Previous Face
-                rotatePrismaTo(currentPrismaFace - 1);
-            }
-        }
-    }
-}

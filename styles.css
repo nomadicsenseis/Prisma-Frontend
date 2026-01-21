@@ -1371,11 +1371,15 @@ input[type="range"]::-webkit-slider-thumb {
     width: 100% !important;
     height: 180px !important;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     margin: 40px 0 20px 0 !important;
-    /* Push globe down */
     z-index: 5;
+    /* Ensure hit zone is full width */
+    width: 100% !important;
+    max-width: none !important;
+    box-sizing: border-box;
 }
 
 .phone-screen .mini-globe-wrapper::after {
@@ -1427,6 +1431,14 @@ input[type="range"]::-webkit-slider-thumb {
     background: linear-gradient(180deg, #0a1020 0%, #050a14 100%) !important;
     overflow: hidden !important;
     padding: 0 !important;
+    /* Removed 2D slide overrides to allow 3D */
+}
+
+/* Hide navigation arrows on mobile */
+.phone-screen .prisma-nav,
+.phone-screen #prismaNavLeft,
+.phone-screen #prismaNavRight {
+    display: none !important;
 }
 
 .phone-screen .comparison-columns,
@@ -1444,167 +1456,48 @@ input[type="range"]::-webkit-slider-thumb {
     -webkit-overflow-scrolling: touch !important;
 }
 
-/* Event cards scroll container - LOWER HALF */
+/* Event cards */
 .phone-screen .events-scroll-container {
     flex: 1;
     position: relative !important;
     padding: 0 !important;
+    /* Remove container padding to maximize hit area */
     margin: 0 !important;
     overflow-y: scroll !important;
     overflow-x: hidden !important;
     z-index: 10;
     scroll-snap-type: y mandatory;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    touch-action: pan-y;
+    width: 100% !important;
+    /* Force full width hit zone */
     background: linear-gradient(180deg, transparent 0%, rgba(10, 20, 40, 0.8) 10%);
+}
+
+.phone-screen .event-card {
+    /* Add padding here instead of container to maintain visual design but keep container 100% wide */
+    padding: 30px 40px !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    max-width: none !important;
 }
 
 .phone-screen .events-scroll-container::-webkit-scrollbar {
     display: none;
 }
 
-/* Event Cards - Clean cards in scroll area */
-.phone-screen .event-card {
-    min-height: 100%;
-    width: 100% !important;
-    padding: 16px 28px 24px 28px !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    backdrop-filter: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
-    display: flex;
-    flex-direction: column;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    /* Center content vertically */
-    box-sizing: border-box;
-}
-
-.phone-screen .event-card.active {
-    transform: none;
-    border-color: transparent !important;
-    box-shadow: none !important;
-}
-
-.phone-screen .event-card .event-tag {
-    font-size: 0.75rem;
-    color: #3eabf7;
-    letter-spacing: 2px;
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    font-weight: 700;
-}
-
-.phone-screen .event-card h3 {
-    font-size: 1.15rem !important;
-    margin-bottom: 12px !important;
-    font-weight: 700;
-    line-height: 1.4;
-    color: #fff;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-}
-
-.phone-screen .event-card p {
-    font-size: 0.9rem !important;
-    line-height: 1.5 !important;
-    color: rgba(255, 255, 255, 0.9);
-    flex: 0 1 auto;
-    /* Allow shrinking, don't force full height */
-    overflow-y: auto;
-}
-
-.phone-screen .event-card .event-date {
-    font-size: 0.65rem;
-    color: rgba(62, 171, 247, 0.9);
-    margin-top: 12px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-/* Hidden elements in phone mode */
-.phone-screen .face-hint {
-    display: none !important;
-}
-
-.phone-screen .prisma-container {
-    padding: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: 100% !important;
-    max-height: 100% !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    margin: 0 !important;
-    transform-style: flat !important;
-}
-
-.phone-screen .prisma {
-    width: 100% !important;
-    height: 100% !important;
-    transform: none !important;
-    transform-style: flat !important;
-}
-
-.phone-screen .prisma-face {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-
-    /* HORIZONTAL SLIDE - faces slide left/right */
-    opacity: 1 !important;
-    /* All faces visible */
-    pointer-events: none;
-    z-index: 1;
-    transform: translateX(100%);
-    /* Default: off to the right */
-    transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
-    /* Disable expensive effects on mobile */
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    will-change: transform;
-}
-
-.phone-screen .prisma-face.active {
-    pointer-events: auto;
-    z-index: 10;
-    transform: translateX(0) !important;
-    /* Centered */
-}
-
-/* Use data attributes to control slide direction */
-.phone-screen .prisma-face.slide-left {
-    transform: translateX(-100%) !important;
-}
-
-.phone-screen .prisma-face.slide-right {
-    transform: translateX(100%) !important;
-}
-
-/* Hide navigation arrows inside phone screen */
-.phone-screen .prisma-nav {
-    display: none !important;
-}
 
 /* 3D Prisma Container */
+/* 3D Prisma Container */
 .prisma-container {
-    width: 600px;
-    height: 80vh;
-    max-height: 800px;
+    width: 100%;
+    /* Full immersive width */
+    height: 100%;
     position: relative;
     transform-style: preserve-3d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .prisma {
@@ -1612,31 +1505,57 @@ input[type="range"]::-webkit-slider-thumb {
     height: 100%;
     position: relative;
     transform-style: preserve-3d;
-    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+    opacity: 0;
+    /* Hidden initially to prevent layout glitches */
+}
+
+.prisma.loaded {
+    opacity: 1;
+    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease-out;
 }
 
 /* Prisma Faces - Holographic Panels */
 .prisma-face {
     position: absolute;
-    width: 100%;
+    top: 0;
+    left: 0;
+    /* Slight overlap to prevent sub-pixel vertical lines during rotation */
+    width: 100.2%;
     height: 100%;
-    background: rgba(10, 20, 40, 0.85);
-    /* Slightly more transparent */
-    border: 1px solid rgba(62, 171, 247, 0.4);
-    border-radius: 24px;
+    /* Solid background to hide internal structure ("boxes") */
+    background: #0a1428;
+
+    /* Remove borders and shadows to eliminate "box" look */
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+
     backface-visibility: hidden;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow:
-        0 40px 100px rgba(0, 0, 0, 0.7),
-        inset 0 0 40px rgba(62, 171, 247, 0.1);
-    backdrop-filter: blur(20px) saturate(180%);
 }
 
 /* Position faces in 3D space - triangular prism */
 /* ONLY apply 3D transforms on desktop screens */
+/* Position faces in 3D space - triangular prism */
+/* Global 3D positioning using dynamic variable */
+.face-comparison {
+    transform: rotateY(0deg) translateZ(var(--prisma-tz, 112px));
+}
+
+.face-events {
+    transform: rotateY(120deg) translateZ(var(--prisma-tz, 112px));
+}
+
+.face-timeline {
+    transform: rotateY(240deg) translateZ(var(--prisma-tz, 112px));
+}
+
 @media (min-width: 769px) {
+
+    /* Desktop specific adjustments */
     .face-comparison {
         transform: rotateY(0deg) translateZ(195px);
     }
@@ -1647,6 +1566,16 @@ input[type="range"]::-webkit-slider-thumb {
 
     .face-timeline {
         transform: rotateY(240deg) translateZ(195px);
+    }
+
+    .prisma-container {
+        width: 600px;
+        /* Force standard width */
+        height: 80vh;
+        top: 0;
+        transform: none;
+        /* Reset vertical center hack */
+        margin: 0;
     }
 }
 
@@ -1856,7 +1785,6 @@ input[type="range"]::-webkit-slider-thumb {
 /* Phone mode: no scale effect during transition */
 .phone-screen .prisma.rotating {
     scale: 1 !important;
-    transform-style: flat !important;
 }
 
 .event-card h3 {
@@ -2751,12 +2679,26 @@ input[type="range"]::-webkit-slider-thumb {
         width: 100%;
         height: 100%;
         border-radius: 0;
+        position: relative;
+        background: #000;
+        overflow: hidden;
+        display: block;
+        /* Reset flex */
     }
 
-    /* 4. Ensure Prisma Viewport uses full space */
+    /* 4. Ensure Prisma Viewport uses full space and centers content */
     .prisma-viewport {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        /* Centering power */
+        align-items: center;
+        justify-content: center;
         perspective: 1000px;
-        /* Less extreme perspective on mobile */
+        overflow: hidden;
     }
 
     /* 5. Hide Global Toggles (User is already on Phone) */
@@ -2794,34 +2736,99 @@ input[type="range"]::-webkit-slider-thumb {
         padding-bottom: env(safe-area-inset-bottom, 20px) !important;
     }
 
-    /* CRITICAL FIX: Disable 3D transforms on prisma CONTAINER only */
-    .phone-screen .prisma,
-    .phone-screen .prisma-container {
-        transform-style: flat !important;
-        perspective: none !important;
-        transform: none !important;
+    /* ==============================================
+   MOBILE-FIRST PRISMA DESIGN
+   For screens <= 480px (iPhone, Android phones)
+   ============================================== */
+    @media (max-width: 480px) {
+
+        /* Ultra-compact globe for mobile app feel */
+        .mini-globe-wrapper {
+            width: 120px;
+            height: 120px;
+            margin: 5px auto 5px auto;
+        }
+
+        #miniGlobe {
+            width: 120px;
+            height: 120px;
+        }
+
+        /* Ultra-compact face header */
+        .face-header {
+            padding: 10px 15px;
+        }
+
+        .face-header h2 {
+            font-size: 0.9rem;
+            line-height: 1.1;
+            margin: 0;
+        }
+
+        .face-tag {
+            font-size: 0.55rem;
+            margin-bottom: 4px;
+        }
+
+        .face-subtitle {
+            font-size: 0.65rem;
+            margin-top: 3px;
+        }
     }
 
-    /* Override the original 3D face positioning for mobile sliding animation */
-    .phone-screen .prisma-face.face-comparison,
-    .phone-screen .prisma-face.face-events,
-    .phone-screen .prisma-face.face-timeline {
-        backface-visibility: visible !important;
-        opacity: 1 !important;
-        /* All faces visible for horizontal slide */
+    /* Closing brace for media query */
+
+    /* Event cards - app-style feed */
+    .events-scroll-container {
+        padding: 0 15px;
+        margin-top: 5px;
+        flex: 1;
+        max-height: calc(100vh - 280px);
     }
 
-    /* Position faces based on slide direction classes */
-    .phone-screen .prisma-face.slide-left {
-        transform: translateX(-100%) !important;
+    .event-card {
+        padding: 12px 15px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(62, 171, 247, 0.2);
     }
 
-    .phone-screen .prisma-face.slide-right {
-        transform: translateX(100%) !important;
+    .event-card h3 {
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+        line-height: 1.3;
     }
 
-    /* Active face is centered */
-    .phone-screen .prisma-face.active {
-        transform: translateX(0) !important;
+    .event-card p {
+        font-size: 0.8rem;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    /* Face hint - smaller */
+    .face-hint {
+        padding: 8px;
+        font-size: 0.6rem;
+    }
+
+    /* Prisma container - full mobile */
+    .prisma-container {
+        padding: 5px;
+        /* Ensure 3D is preserved */
+        transform-style: preserve-3d;
+    }
+
+    .prisma {
+        width: 100%;
+        height: 100%;
+        transform-style: preserve-3d;
+    }
+
+    .prisma-face {
+        border-radius: 12px;
+        padding: 5px;
+        /* Ensure faces are visible in 3D */
+        backface-visibility: hidden;
     }
 }
