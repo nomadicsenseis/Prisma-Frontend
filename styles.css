@@ -31,13 +31,15 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 50; /* Higher than panels but below mode toggle (9999) */
+    z-index: 50;
+    /* Higher than panels but below mode toggle (9999) */
 }
 
 /* Panels */
 .panel {
     position: absolute;
-    z-index: 60; /* Higher than globeViz (50) */
+    z-index: 60;
+    /* Higher than globeViz (50) */
     background: var(--panel-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -1346,6 +1348,7 @@ input[type="range"]::-webkit-slider-thumb {
     color: rgba(255, 255, 255, 0.9);
     display: -webkit-box;
     -webkit-line-clamp: 1;
+    line-clamp: 1;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -1548,21 +1551,30 @@ input[type="range"]::-webkit-slider-thumb {
     width: 100% !important;
     height: 100% !important;
     margin: 0 !important;
-    height: 100% !important;
-    margin: 0 !important;
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
+
+    /* PURE opacity crossfade - NO transforms */
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.2s ease-out, visibility 0.2s ease-out;
     z-index: 1;
+    transform: none !important;
 }
 
 .phone-screen .prisma-face.active {
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
     z-index: 10;
+    transform: none !important;
+}
+
+/* Non-active faces - no transform */
+.phone-screen .prisma-face:not(.active) {
+    transform: none !important;
 }
 
 /* Hide navigation arrows inside phone screen */
@@ -2135,10 +2147,12 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* Mode Toggle Button */
 .prisma-mode-toggle {
-    position: fixed; /* Always visible regardless of container visibility */
+    position: fixed;
+    /* Always visible regardless of container visibility */
     top: 30px;
     right: 30px;
-    z-index: 9999; /* Above everything */
+    z-index: 9999;
+    /* Above everything */
     display: flex;
     gap: 8px;
     background: rgba(15, 23, 42, 0.8);
@@ -2147,7 +2161,8 @@ input[type="range"]::-webkit-slider-thumb {
     border: 1px solid rgba(62, 171, 247, 0.25);
     backdrop-filter: blur(15px);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-    pointer-events: auto !important; /* CRITICAL: Ensure clicks are received */
+    pointer-events: auto !important;
+    /* CRITICAL: Ensure clicks are received */
 }
 
 .mode-btn {
@@ -2184,7 +2199,8 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* Desktop Layout Container - Full Immersion */
 .prisma-desktop-layout {
-    display: none; /* Hidden by default (Phone mode) */
+    display: none;
+    /* Hidden by default (Phone mode) */
     position: absolute;
     top: 0;
     left: 0;
@@ -2213,7 +2229,8 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* DESKTOP MODE ACTIVE STATE */
 #prismaSection.desktop-mode {
-    display: block !important; /* CRITICAL: Override inline display:none */
+    display: block !important;
+    /* CRITICAL: Override inline display:none */
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
@@ -2221,11 +2238,13 @@ input[type="range"]::-webkit-slider-thumb {
     height: 100vh !important;
     margin: 0 !important;
     padding: 0 !important;
-    padding-top: 80px !important; /* Room for mode toggle */
+    padding-top: 80px !important;
+    /* Room for mode toggle */
     max-width: none !important;
     max-height: none !important;
     z-index: 100;
-    background: black; /* Ensure background is solid */
+    background: black;
+    /* Ensure background is solid */
     box-sizing: border-box !important;
 }
 
@@ -2234,7 +2253,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 #prismaSection.desktop-mode .prisma-desktop-layout {
-    display: flex !important; /* Show Desktop Layout */
+    display: flex !important;
+    /* Show Desktop Layout */
 }
 
 /* Show desktop layout when mode is active */
@@ -2252,9 +2272,11 @@ input[type="range"]::-webkit-slider-thumb {
     flex: 1;
     min-width: 10%;
     height: 100%;
-    min-height: 100vh; /* Force visibility */
+    min-height: 100vh;
+    /* Force visibility */
 
-    background: rgba(10, 20, 40, 0.9); /* Debug: Visible dark background */
+    background: rgba(10, 20, 40, 0.9);
+    /* Debug: Visible dark background */
     border: none;
     border-radius: 0;
     box-shadow: none;
@@ -2344,7 +2366,8 @@ input[type="range"]::-webkit-slider-thumb {
 /* Right panel (Timeline) needs extra top padding to not overlap toggle */
 .desktop-panel.panel-timeline .face-header-fixed,
 .desktop-panel.right .face-header-fixed {
-    padding-top: 100px !important; /* Clear space for mode toggle */
+    padding-top: 100px !important;
+    /* Clear space for mode toggle */
 }
 
 .desktop-panel:not(.focused) .face-header-fixed {
@@ -2656,4 +2679,126 @@ input[type="range"]::-webkit-slider-thumb {
 /* Clean up hints */
 .desktop-panel .face-hint {
     display: none;
+}
+
+/* =========================================
+   RESPONSIVE / REAL MOBILE DEVICE STYLES
+   ========================================= */
+
+/* When on a real mobile device (width < 768px), remove the "Simulator Frame"
+   and just show the screen content full width/height. */
+
+@media (max-width: 768px) {
+
+    /* 1. Hide the Simulator Container visuals */
+    .phone-simulator {
+        background: #000;
+        /* Plain black instead of gradient */
+    }
+
+    /* FIX: Prevent lateral scrolling / rubber banding */
+    html,
+    body {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        position: fixed;
+    }
+
+    .phone-device {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+        background: #000;
+        padding: 0;
+        margin: 0;
+    }
+
+    /* 2. Hide specific frame elements */
+    .phone-notch,
+    .phone-home-bar {
+        display: none !important;
+    }
+
+    /* 3. Screen fills viewport */
+    .phone-screen {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+    }
+
+    /* 4. Ensure Prisma Viewport uses full space */
+    .prisma-viewport {
+        perspective: 1000px;
+        /* Less extreme perspective on mobile */
+    }
+
+    /* 5. Hide Global Toggles (User is already on Phone) */
+    .prisma-mode-toggle {
+        display: none !important;
+    }
+
+    /* 6. Hide Desktop Layout definitively - High Specificity */
+    #prismaSection .prisma-desktop-layout,
+    #prismaSection.desktop-mode .prisma-desktop-layout,
+    .prisma-desktop-layout {
+        display: none !important;
+    }
+
+    /* 7. Hide Left Panel definitively */
+    .left-panel {
+        display: none !important;
+    }
+
+    /* 8. Ensure Mini Globe is visible and sized correctly */
+    .phone-screen .mini-globe-wrapper {
+        height: 35vh !important;
+        /* give it good space */
+        min-height: 250px;
+        margin: 10px 0 !important;
+    }
+
+    /* 9. Adjust content padding for "Safe Area" (Notch/Dynamic Island) */
+    .phone-screen .face-header {
+        padding-top: env(safe-area-inset-top, 40px) !important;
+        padding-bottom: 10px !important;
+    }
+
+    .phone-screen .events-scroll-container {
+        padding-bottom: env(safe-area-inset-bottom, 20px) !important;
+    }
+
+    /* CRITICAL FIX: Disable 3D transforms on prisma CONTAINER only */
+    .phone-screen .prisma,
+    .phone-screen .prisma-container {
+        transform-style: flat !important;
+        perspective: none !important;
+        transform: none !important;
+    }
+
+    /* Override the original 3D face positioning for mobile sliding animation */
+    .phone-screen .prisma-face.face-comparison,
+    .phone-screen .prisma-face.face-events,
+    .phone-screen .prisma-face.face-timeline {
+        /* Reset the 3D positioning */
+        backface-visibility: visible !important;
+    }
+
+    /* Inactive faces slide out to left */
+    .phone-screen .prisma-face.face-comparison:not(.active),
+    .phone-screen .prisma-face.face-events:not(.active),
+    .phone-screen .prisma-face.face-timeline:not(.active) {
+        transform: translateX(-30%) !important;
+        opacity: 0 !important;
+    }
+
+    /* Active face is centered */
+    .phone-screen .prisma-face.face-comparison.active,
+    .phone-screen .prisma-face.face-events.active,
+    .phone-screen .prisma-face.face-timeline.active {
+        transform: translateX(0) !important;
+        opacity: 1 !important;
+    }
 }

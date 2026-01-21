@@ -3,8 +3,16 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Prisma Aletheia - Noticias de España</title>
+
+    <!-- PWA / Mobile Capable -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./img/iphone_icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
 
     <!-- Local Vendor Scripts -->
     <script src="./vendor/three.min.js"></script>
@@ -12,7 +20,7 @@
     <script src="./vendor/lucide.min.js"></script>
 
     <!-- External Styles -->
-    <link rel="stylesheet" href="./styles.css?v=104">
+    <link rel="stylesheet" href="./styles.css?v=200">
 </head>
 
 <body>
@@ -152,7 +160,7 @@
                 </div>
                 <!-- Home indicator bar -->
                 <div class="phone-home-bar"></div>
-        </div>
+            </div>
         </div>
 
         <!-- Desktop Layout (3-panel with dynamic focus) -->
@@ -336,7 +344,7 @@
         </div>
     </div>
 
-    <script src="./script.js?v=104"></script>
+    <script src="./script.js?v=200"></script>
 </body>
 
 </html>

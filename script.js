@@ -774,7 +774,10 @@ function rotatePrismaTo(faceIndex) {
     const diff = ((targetAngle - currentAngle) % 360 + 540) % 360 - 180;
     prismaRotation += diff;
 
-    prisma.style.transform = `rotateY(${prismaRotation}deg)`;
+    // Only apply 3D rotation on desktop - mobile uses CSS-based 2D sliding
+    if (window.innerWidth >= 768) {
+        prisma.style.transform = `rotateY(${prismaRotation}deg)`;
+    }
 
     // Update active face class (for phone mode visibility)
     const normalizedIndex = ((faceIndex % 3) + 3) % 3;
@@ -856,13 +859,20 @@ async function fetchPrismaHechos() {
                 console.log('🔸 Calling syncDesktopPanels...');
                 syncDesktopPanels();
                 focusDesktopPanel(desktopFocusIndex);
+            } else if (prismaMode === 'phone') {
+                // Force "Events" face (Face 1) active on load to avoid black screen
+                setTimeout(() => rotatePrismaTo(1), 100);
             }
 
             // If we are already on a specific face, reload it now that we have data
             if (currentPrismaFace === 1) {
-                loadPrismaComparison(prismaHechos[0]);
+                // Face 1 is Events, which we just rendered via renderPrismaEvents called above
+                // Ensure it is rotated to
+                rotatePrismaTo(1);
             } else if (currentPrismaFace === 2) {
                 loadPrismaMacroTimeline();
+            } else if (currentPrismaFace === 0) {
+                loadPrismaComparison(prismaHechos[0]);
             }
         } else {
             document.getElementById('eventsContainer').innerHTML =
@@ -1363,16 +1373,8 @@ function initPrisma() {
         });
     }
 
-    // Swipe gestures on viewport
-    const viewport = document.querySelector('.prisma-viewport');
-    if (viewport) {
-        viewport.addEventListener('touchstart', handlePrismaTouchStart, { passive: true });
-        viewport.addEventListener('touchend', handlePrismaTouchEnd);
-
-        // Mouse drag for desktop
-        viewport.addEventListener('mousedown', handlePrismaTouchStart);
-        viewport.addEventListener('mouseup', handlePrismaTouchEnd);
-    }
+    // Swipe gestures are now handled by document-level handler at bottom of file
+    // (handles globe exclusion and correct direction)
 
     // Face indicator dot clicks
     document.querySelectorAll('.face-dot').forEach(dot => {
@@ -1496,18 +1498,18 @@ function initDesktopMode() {
 
     if (btnViewGlobe) {
         btnViewGlobe.addEventListener('click', () => {
-             // Open Globe Mode
-             document.getElementById('prismaSection').style.display = 'none';
-             const globeContainer = document.getElementById('fullScreenGlobeContainer');
-             globeContainer.style.display = 'block';
-             initFullScreenGlobe();
-             setActiveNav(btnViewGlobe);
+            // Open Globe Mode
+            document.getElementById('prismaSection').style.display = 'none';
+            const globeContainer = document.getElementById('fullScreenGlobeContainer');
+            globeContainer.style.display = 'block';
+            initFullScreenGlobe();
+            setActiveNav(btnViewGlobe);
         });
     }
 
     // Mode toggle buttons (Phone/Desktop/Globe)
     const prismaModeGlobe = document.getElementById('prismaModeGlobe');
-    
+
     // Helper to hide Globe view (original)
     function hideOriginalGlobeView() {
         const globeViz = document.getElementById('globeViz');
@@ -1515,7 +1517,7 @@ function initDesktopMode() {
         if (globeViz) globeViz.style.display = 'none';
         if (leftPanel) leftPanel.style.display = 'none';
     }
-    
+
     // SIMPLE Mode toggle buttons - use unified switchViewMode
     if (prismaModePhone) {
         prismaModePhone.addEventListener('click', () => switchViewMode('phone'));
@@ -1544,18 +1546,24 @@ function initDesktopMode() {
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
         if (prismaMode === 'desktop' && document.getElementById('prismaSection').style.display !== 'none') {
-             if (e.key === 'ArrowLeft') focusDesktopPanel(desktopFocusIndex - 1);
-             if (e.key === 'ArrowRight') focusDesktopPanel(desktopFocusIndex + 1);
+            if (e.key === 'ArrowLeft') focusDesktopPanel(desktopFocusIndex - 1);
+            if (e.key === 'ArrowRight') focusDesktopPanel(desktopFocusIndex + 1);
         }
     });
 
-    // FORCE DESKTOP MODE ON INIT
-    switchViewMode('desktop');
+    // INIT MODE: Check screen size and choose appropriate mode
+    if (window.innerWidth < 768) {
+        // Mobile: Force phone mode immediately
+        switchViewMode('phone');
+    } else {
+        // Desktop: Force desktop mode
+        switchViewMode('desktop');
+    }
 }
 
 function setActiveNav(activeBtn) {
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-    if(activeBtn) activeBtn.classList.add('active');
+    if (activeBtn) activeBtn.classList.add('active');
 }
 
 // Update mode toggle button states (Phone/Desktop/Globe)
@@ -1563,7 +1571,7 @@ function updateModeToggle(mode) {
     const phone = document.getElementById('prismaModePhone');
     const desktop = document.getElementById('prismaModeDesktop');
     const globe = document.getElementById('prismaModeGlobe');
-    
+
     if (phone) phone.classList.toggle('active', mode === 'phone');
     if (desktop) desktop.classList.toggle('active', mode === 'desktop');
     if (globe) globe.classList.toggle('active', mode === 'globe');
@@ -1577,13 +1585,13 @@ let currentViewMode = 'desktop'; // Track current mode
 function switchViewMode(mode) {
     console.log('🔀 Switching to mode:', mode);
     currentViewMode = mode;
-    
+
     const prismaSection = document.getElementById('prismaSection');
     const globeViz = document.getElementById('globeViz');
     const leftPanel = document.querySelector('.left-panel');
     const calendarContainer = document.querySelector('.calendar-container');
     const newsListContainer = document.querySelector('.news-list');
-    
+
     // STEP 1: Hide ALL views first
     if (prismaSection) {
         prismaSection.style.display = 'none';
@@ -1591,7 +1599,7 @@ function switchViewMode(mode) {
     }
     if (globeViz) globeViz.style.display = 'none';
     if (leftPanel) leftPanel.style.display = 'none';
-    
+
     // STEP 2: Show the selected view
     if (mode === 'phone') {
         // Phone Mode: Prisma in phone simulator
@@ -1601,8 +1609,10 @@ function switchViewMode(mode) {
         }
         prismaMode = 'phone';
         initMiniGlobe();
+        // Force "Events" face (Face 1) to be active so it's not black/hidden
+        setTimeout(() => rotatePrismaTo(1), 100);
         if (prismaHechos.length === 0) fetchPrismaHechos();
-        
+
     } else if (mode === 'desktop') {
         // Desktop Mode: Prisma carousel
         if (prismaSection) {
@@ -1613,7 +1623,7 @@ function switchViewMode(mode) {
         fetchPrismaHechos(); // Will call syncDesktopPanels when done
         initDesktopMiniGlobe();
         focusDesktopPanel(desktopFocusIndex);
-        
+
     } else if (mode === 'globe') {
         // Globe Mode: Original globe view with calendar
         if (globeViz) globeViz.style.display = 'block';
@@ -1622,10 +1632,10 @@ function switchViewMode(mode) {
         if (newsListContainer) newsListContainer.style.display = 'block';
         initializeGlobe();
     }
-    
+
     // STEP 3: Update toggle buttons
     updateModeToggle(mode);
-    
+
     // Re-initialize Lucide icons
     if (window.lucide) lucide.createIcons();
 }
@@ -1676,7 +1686,7 @@ let fullScreenGlobeViz = null;
 function initFullScreenGlobe() {
     const container = document.getElementById('fullScreenGlobe');
     if (!container) return;
-    
+
     // If already initialized, just resize/update
     if (fullScreenGlobeViz) {
         // Force resize
@@ -1729,7 +1739,7 @@ function initFullScreenGlobe() {
 
     // Handle Window Resize
     window.addEventListener('resize', () => {
-        if(fullScreenGlobeViz && document.getElementById('fullScreenGlobeContainer').style.display !== 'none') {
+        if (fullScreenGlobeViz && document.getElementById('fullScreenGlobeContainer').style.display !== 'none') {
             fullScreenGlobeViz.width(window.innerWidth);
             fullScreenGlobeViz.height(window.innerHeight);
         }
@@ -2054,4 +2064,84 @@ function updateDesktopMiniGlobePosition(index) {
 
     desktopMiniGlobeViz.htmlElementsData([{ lat, lng, name: locationName }]);
     desktopMiniGlobeViz.pointOfView({ lat, lng, alt: 0.5 }, 1000);
+}
+
+// =========================================
+// RESPONSIVE / AUTO-MOBILE MODE
+// =========================================
+function checkMobileMode() {
+    // If width is tiny (< 768), force Phone Mode and hide toggles
+    if (window.innerWidth < 768) {
+        // Only if we aren't already in phone mode, switch
+        if (currentViewMode !== 'phone') {
+            console.log('📱 Mobile device detected - Switching to Phone View');
+            switchViewMode('phone');
+        }
+    } else {
+        // Optional: Switch back to Desktop if user resizes back to desktop?
+        // Maybe safer to leave it unless we were purely auto-switched.
+        // For now, let's reset to desktop if we grew large and were in phone mode
+        if (currentViewMode === 'phone') {
+            switchViewMode('desktop');
+        }
+    }
+}
+
+// Check on load
+window.addEventListener('load', checkMobileMode);
+
+// Check on resize (debounced slightly)
+// Check on resize (debounced slightly)
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(checkMobileMode, 200);
+});
+
+// =========================================
+// MOBILE SWIPE GESTURES
+// =========================================
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+let touchStartElement = null;
+
+document.addEventListener('touchstart', e => {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+    touchStartElement = e.target;
+}, { passive: true });
+
+document.addEventListener('touchend', e => {
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    handleSwipe();
+}, { passive: true });
+
+function handleSwipe() {
+    // Only handle swipe in Phone Mode
+    if (currentViewMode !== 'phone') return;
+
+    // Don't handle swipe if it started on the globe
+    if (touchStartElement && touchStartElement.closest('#miniGlobe, #miniGlobeContainer, .mini-globe-wrapper, canvas')) {
+        return;
+    }
+
+    const diffX = touchStartX - touchEndX;
+    const diffY = touchStartY - touchEndY;
+    const threshold = 60; // minimum distance for swipe
+
+    // Check if horizontal swipe dominates (to avoid interfering with scroll)
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+        if (Math.abs(diffX) > threshold) {
+            if (diffX > 0) {
+                // Swipe Left -> Next Face (natural: swipe left to go forward)
+                rotatePrismaTo(currentPrismaFace + 1);
+            } else {
+                // Swipe Right -> Previous Face
+                rotatePrismaTo(currentPrismaFace - 1);
+            }
+        }
+    }
 }
