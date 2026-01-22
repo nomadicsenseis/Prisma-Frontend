@@ -401,6 +401,35 @@ function initializeGlobe() {
         requestAnimationFrame(animate);
     })();
     lucide.createIcons();
+
+    // =========================================
+    // HYBRID ENGINE: Main Globe Zoom Switching
+    // =========================================
+    initMainLeafletMap();
+
+    // Enable zooming and set limits
+    world.controls().enableZoom = true;
+    world.controls().minDistance = 120;
+    world.controls().maxDistance = 800;
+
+    // Zoom threshold for engine switching
+    const MAIN_ZOOM_THRESHOLD = 0.3;
+    let mainLastAltitude = 1.5;
+
+    world.controls().addEventListener('change', () => {
+        if (mainEngineState !== ENGINE_STATE.ORBITAL) return;
+
+        const pov = world.pointOfView();
+        const currentAltitude = pov.altitude || 1.5;
+
+        // Detect zoom-in past threshold
+        if (currentAltitude < MAIN_ZOOM_THRESHOLD && mainLastAltitude >= MAIN_ZOOM_THRESHOLD) {
+            console.log('🔍 Main Globe: Zoom threshold crossed - switching to 2D Map');
+            transitionMainToLeaflet();
+        }
+
+        mainLastAltitude = currentAltitude;
+    });
 }
 
 // Cloud constants
@@ -1654,6 +1683,276 @@ let prismaMode = 'desktop'; // DEFAULT TO DESKTOP
 let desktopFocusIndex = 1; // Start on Events (center)
 let desktopMiniGlobeViz = null;
 
+// =========================================
+// HYBRID GLOBE-MAP ENGINE STATE MACHINE
+// =========================================
+const ENGINE_STATE = {
+    ORBITAL: 'orbital',      // 3D Globe active, 2D Map hidden
+    PRELOAD: 'preload',      // 3D Globe active, 2D Map loading tiles invisibly
+    TRANSITION: 'transition', // Cross-fade animation in progress
+    LOCAL: 'local'           // 2D Map active, 3D Globe hidden
+};
+
+// Desktop Mini Globe Engine State
+let currentEngineState = ENGINE_STATE.ORBITAL;
+let desktopLeafletMap = null;
+
+// Main Globe (Globe Mode) Engine State
+let mainEngineState = ENGINE_STATE.ORBITAL;
+let mainLeafletMap = null;
+
+const ZOOM_CORRECTION = 0.6;
+
+// Initialize Leaflet Map for Main Globe (full screen)
+function initMainLeafletMap() {
+    const container = document.getElementById('mainLeafletMap');
+    if (!container || mainLeafletMap) return;
+
+    mainLeafletMap = L.map('mainLeafletMap', {
+        center: [40.4168, -3.7038],
+        zoom: 6,
+        doubleClickZoom: false,
+        zoomControl: true,
+        attributionControl: false,
+        minZoom: 3,
+        maxZoom: 18
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+    }).addTo(mainLeafletMap);
+
+    // Double-tap to switch back to Globe
+    mainLeafletMap.on('dblclick', function () {
+        console.log('👆👆 Main Map Double Tap: Switching to Globe');
+        transitionMainToGlobe();
+    });
+
+    // Zoom-out threshold for switching back to globe
+    const MAP_ZOOM_THRESHOLD = 4;
+    let lastMapZoom = 6;
+
+    mainLeafletMap.on('zoomend', function () {
+        if (mainEngineState !== ENGINE_STATE.LOCAL) return;
+
+        const currentZoom = mainLeafletMap.getZoom();
+
+        if (currentZoom <= MAP_ZOOM_THRESHOLD && lastMapZoom > MAP_ZOOM_THRESHOLD) {
+            console.log('🔍 Main Map: Zoom out threshold - switching to 3D Globe');
+            transitionMainToGlobe();
+        }
+
+        lastMapZoom = currentZoom;
+    });
+
+    console.log('🗺️ Main Leaflet Map initialized');
+}
+
+// Transition Main Globe to Leaflet Map
+function transitionMainToLeaflet() {
+    if (mainEngineState !== ENGINE_STATE.ORBITAL) return;
+    mainEngineState = ENGINE_STATE.TRANSITION;
+    console.log('🔄 Main Engine: ORBITAL → LOCAL');
+
+    const globeDiv = document.getElementById('globeViz');
+    const mapDiv = document.getElementById('mainLeafletMap');
+
+    if (!globeDiv || !mapDiv) return;
+
+    // Sync camera
+    if (world && mainLeafletMap) {
+        const pov = world.pointOfView();
+        const zoom = Math.max(2, Math.min(18, altitudeToZoom(pov.altitude || 0.5)));
+        mainLeafletMap.setView([pov.lat, pov.lng], zoom, { animate: false });
+        setTimeout(() => mainLeafletMap.invalidateSize(), 50);
+    }
+
+    mapDiv.classList.add('active');
+    globeDiv.classList.add('hidden');
+
+    setTimeout(() => {
+        mainEngineState = ENGINE_STATE.LOCAL;
+        console.log('🗺️ Main Engine: LOCAL (2D Map)');
+    }, 500);
+}
+
+// Transition Main Leaflet Map to Globe
+function transitionMainToGlobe() {
+    if (mainEngineState !== ENGINE_STATE.LOCAL) return;
+    mainEngineState = ENGINE_STATE.TRANSITION;
+    console.log('🔄 Main Engine: LOCAL → ORBITAL');
+
+    const globeDiv = document.getElementById('globeViz');
+    const mapDiv = document.getElementById('mainLeafletMap');
+
+    if (!globeDiv || !mapDiv) return;
+
+    // Sync camera
+    if (world && mainLeafletMap) {
+        const center = mainLeafletMap.getCenter();
+        const alt = zoomToAltitude(mainLeafletMap.getZoom());
+        world.pointOfView({
+            lat: center.lat,
+            lng: center.lng,
+            altitude: Math.max(0.3, Math.min(2.5, alt))
+        }, 500);
+    }
+
+    mapDiv.classList.remove('active');
+    globeDiv.classList.remove('hidden');
+
+    setTimeout(() => {
+        mainEngineState = ENGINE_STATE.ORBITAL;
+        console.log('🌍 Main Engine: ORBITAL (3D Globe)');
+    }, 500);
+}
+
+// Altitude <-> Zoom conversion for camera sync
+function altitudeToZoom(altitude) {
+    return Math.log2(128 * ZOOM_CORRECTION / altitude);
+}
+
+function zoomToAltitude(zoom) {
+    return (128 / Math.pow(2, zoom)) * ZOOM_CORRECTION;
+}
+
+// Initialize Leaflet Map for hybrid engine
+function initDesktopLeafletMap() {
+    const container = document.getElementById('desktopLeafletMap');
+    if (!container || desktopLeafletMap) return;
+
+    // Wait for container to have dimensions
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        setTimeout(initDesktopLeafletMap, 100);
+        return;
+    }
+
+    desktopLeafletMap = L.map('desktopLeafletMap', {
+        center: [40.4168, -3.7038],
+        zoom: 6,
+        doubleClickZoom: false, // We use double-click for engine switching
+        zoomControl: true, // Enable zoom controls for map
+        attributionControl: false,
+        minZoom: 3,
+        maxZoom: 18
+    });
+
+    // Dark tile layer to match app theme
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+    }).addTo(desktopLeafletMap);
+
+    // Double-tap to switch back to Globe
+    desktopLeafletMap.on('dblclick', function () {
+        console.log('👆👆 Map Double Tap: Switching to Globe');
+        transitionToGlobe();
+    });
+
+    // Zoom-out threshold for switching back to globe
+    const MAP_ZOOM_THRESHOLD = 4; // When zoom is below this, switch back to globe
+    let lastMapZoom = 6;
+
+    desktopLeafletMap.on('zoomend', function () {
+        if (currentEngineState !== ENGINE_STATE.LOCAL) return;
+
+        const currentZoom = desktopLeafletMap.getZoom();
+
+        // Detect zoom-out past threshold
+        if (currentZoom <= MAP_ZOOM_THRESHOLD && lastMapZoom > MAP_ZOOM_THRESHOLD) {
+            console.log('🔍 Map zoom out threshold crossed - switching to 3D Globe');
+            transitionToGlobe();
+        }
+
+        lastMapZoom = currentZoom;
+    });
+
+    console.log('🗺️ Leaflet Map initialized for hybrid engine');
+}
+
+// Transition from Globe (3D) to Leaflet Map (2D)
+function transitionToLeaflet() {
+    if (currentEngineState !== ENGINE_STATE.ORBITAL) return;
+    currentEngineState = ENGINE_STATE.TRANSITION;
+    console.log('🔄 Engine Transition: ORBITAL → LOCAL');
+
+    const globeDiv = document.getElementById('desktopMiniGlobe');
+    const mapDiv = document.getElementById('desktopLeafletMap');
+
+    if (!globeDiv || !mapDiv) return;
+
+    // Ensure Leaflet is initialized
+    if (!desktopLeafletMap) {
+        initDesktopLeafletMap();
+    }
+
+    // Sync camera position from Globe to Map
+    if (desktopMiniGlobeViz && desktopLeafletMap) {
+        const pov = desktopMiniGlobeViz.pointOfView();
+        const altitude = pov.altitude || 0.5;
+        const zoom = Math.max(2, Math.min(18, altitudeToZoom(altitude)));
+        desktopLeafletMap.setView([pov.lat, pov.lng], zoom, { animate: false });
+
+        // Force Leaflet to recalculate its size
+        setTimeout(() => {
+            desktopLeafletMap.invalidateSize();
+        }, 50);
+    }
+
+    // Cross-fade animation
+    mapDiv.classList.add('active');
+    globeDiv.classList.add('hidden');
+
+    // Pause globe auto-rotation during map view
+    if (desktopMiniGlobeViz && desktopMiniGlobeViz.controls()) {
+        desktopMiniGlobeViz.controls().autoRotate = false;
+    }
+
+    setTimeout(() => {
+        currentEngineState = ENGINE_STATE.LOCAL;
+        console.log('🗺️ Engine State: LOCAL (2D Map active)');
+    }, 500);
+}
+
+// Transition from Leaflet Map (2D) to Globe (3D)
+function transitionToGlobe() {
+    if (currentEngineState !== ENGINE_STATE.LOCAL) return;
+    currentEngineState = ENGINE_STATE.TRANSITION;
+    console.log('🔄 Engine Transition: LOCAL → ORBITAL');
+
+    const globeDiv = document.getElementById('desktopMiniGlobe');
+    const mapDiv = document.getElementById('desktopLeafletMap');
+
+    if (!globeDiv || !mapDiv) return;
+
+    // Sync camera position from Map to Globe
+    if (desktopMiniGlobeViz && desktopLeafletMap) {
+        const center = desktopLeafletMap.getCenter();
+        const alt = zoomToAltitude(desktopLeafletMap.getZoom());
+        desktopMiniGlobeViz.pointOfView({
+            lat: center.lat,
+            lng: center.lng,
+            altitude: Math.max(0.2, Math.min(2.5, alt))
+        }, 500);
+    }
+
+    // Cross-fade animation
+    mapDiv.classList.remove('active');
+    globeDiv.classList.remove('hidden');
+
+    // Resume globe auto-rotation
+    if (desktopMiniGlobeViz && desktopMiniGlobeViz.controls()) {
+        desktopMiniGlobeViz.controls().autoRotate = true;
+    }
+
+    setTimeout(() => {
+        currentEngineState = ENGINE_STATE.ORBITAL;
+        console.log('🌍 Engine State: ORBITAL (3D Globe active)');
+    }, 500);
+}
+
 // Mode Toggle Elements
 const btnViewPrisma = document.getElementById('viewPrisma');
 const btnViewGlobe = document.getElementById('viewGlobe');
@@ -1765,6 +2064,7 @@ function switchViewMode(mode) {
     currentViewMode = mode;
 
     const prismaSection = document.getElementById('prismaSection');
+    const mainGlobeContainer = document.getElementById('mainGlobeContainer');
     const globeViz = document.getElementById('globeViz');
     const leftPanel = document.querySelector('.left-panel');
     const calendarContainer = document.querySelector('.calendar-container');
@@ -1775,8 +2075,17 @@ function switchViewMode(mode) {
         prismaSection.style.display = 'none';
         prismaSection.classList.remove('desktop-mode');
     }
-    if (globeViz) globeViz.style.display = 'none';
+    if (mainGlobeContainer) mainGlobeContainer.style.display = 'none';
     if (leftPanel) leftPanel.style.display = 'none';
+
+    // Reset engine states when switching modes
+    mainEngineState = ENGINE_STATE.ORBITAL;
+    currentEngineState = ENGINE_STATE.ORBITAL;
+
+    // Reset visual states
+    const mainMapDiv = document.getElementById('mainLeafletMap');
+    if (mainMapDiv) mainMapDiv.classList.remove('active');
+    if (globeViz) globeViz.classList.remove('hidden');
 
     // STEP 2: Show the selected view
     if (mode === 'phone') {
@@ -1803,8 +2112,8 @@ function switchViewMode(mode) {
         focusDesktopPanel(desktopFocusIndex);
 
     } else if (mode === 'globe') {
-        // Globe Mode: Original globe view with calendar
-        if (globeViz) globeViz.style.display = 'block';
+        // Globe Mode: Full globe view with hybrid engine
+        if (mainGlobeContainer) mainGlobeContainer.style.display = 'block';
         if (leftPanel) leftPanel.style.display = 'flex';
         if (calendarContainer) calendarContainer.style.display = 'block';
         if (newsListContainer) newsListContainer.style.display = 'block';
@@ -2198,9 +2507,32 @@ function initDesktopMiniGlobe() {
         requestAnimationFrame(animateDesktopClouds);
     })();
 
-    desktopMiniGlobeViz.controls().enableZoom = false;
+    // ENABLE ZOOM for hybrid engine switching
+    desktopMiniGlobeViz.controls().enableZoom = true;
     desktopMiniGlobeViz.controls().autoRotate = true;
     desktopMiniGlobeViz.controls().autoRotateSpeed = 0.3;
+    desktopMiniGlobeViz.controls().minDistance = 120; // Allow closer zoom
+    desktopMiniGlobeViz.controls().maxDistance = 500; // Don't go too far
+
+    // Zoom threshold for engine switching (altitude)
+    const ZOOM_THRESHOLD = 0.25; // When altitude is below this, switch to map
+    let lastAltitude = 0.5;
+
+    // Listen for zoom changes on the globe
+    desktopMiniGlobeViz.controls().addEventListener('change', () => {
+        if (currentEngineState !== ENGINE_STATE.ORBITAL) return;
+
+        const pov = desktopMiniGlobeViz.pointOfView();
+        const currentAltitude = pov.altitude || 0.5;
+
+        // Detect zoom-in past threshold
+        if (currentAltitude < ZOOM_THRESHOLD && lastAltitude >= ZOOM_THRESHOLD) {
+            console.log('🔍 Zoom threshold crossed - switching to 2D Map');
+            transitionToLeaflet();
+        }
+
+        lastAltitude = currentAltitude;
+    });
 
     // DYNAMIC RESIZING Support
     const resizeObserver = new ResizeObserver(entries => {
@@ -2219,6 +2551,31 @@ function initDesktopMiniGlobe() {
     if (prismaHechos.length > 0) {
         updateDesktopMiniGlobePosition(currentHechoIndex);
     }
+
+    // =========================================
+    // HYBRID ENGINE: Double-Tap to Switch
+    // =========================================
+    const globeContainer = document.getElementById('desktopMiniGlobeContainer');
+    if (globeContainer) {
+        // Double-tap on globe container to switch to Map (alternative method)
+        globeContainer.addEventListener('dblclick', (e) => {
+            // Only switch if we are in ORBITAL state (Globe active)
+            if (currentEngineState === ENGINE_STATE.ORBITAL) {
+                console.log('👆👆 Globe Double Tap: Switching to Map');
+                transitionToLeaflet();
+                e.stopPropagation();
+            }
+        });
+
+        // Add visual hint for engine switching
+        const hint = document.createElement('div');
+        hint.className = 'engine-switch-hint';
+        hint.textContent = '🔍 Zoom in for map details';
+        globeContainer.appendChild(hint);
+    }
+
+    // Initialize Leaflet map for hybrid engine (pre-load)
+    initDesktopLeafletMap();
 }
 
 function updateDesktopMiniGlobePosition(index) {

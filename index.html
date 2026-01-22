@@ -19,6 +19,10 @@
     <script src="./vendor/globe.gl.min.js"></script>
     <script src="./vendor/lucide.min.js"></script>
 
+    <!-- Leaflet CSS && JS for 2D Map Engine -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <!-- External Styles -->
     <link rel="stylesheet" href="./styles.css?v=206">
 </head>
@@ -37,8 +41,12 @@
         </button>
     </div>
 
-    <!-- Globe Container -->
-    <div id="globeViz"></div>
+    <!-- Globe Container with Hybrid Engine -->
+    <div id="mainGlobeContainer">
+        <div id="mainLeafletMap"></div>
+        <div id="globeViz"></div>
+        <div class="engine-switch-hint" id="mainGlobeHint">🔍 Zoom in for map details</div>
+    </div>
 
     <!-- Timeline View (Full Screen Impact) -->
     <div id="timelineSection" class="timeline-full-view" style="display: none;">
@@ -197,6 +205,7 @@
                     <p id="desktopEventDate" class="face-subtitle"></p>
                 </div>
                 <div id="desktopMiniGlobeContainer" class="mini-globe-wrapper">
+                    <div id="desktopLeafletMap"></div>
                     <div id="desktopMiniGlobe"></div>
                 </div>
                 <div class="events-scroll-container" id="desktopEventsContainer">
