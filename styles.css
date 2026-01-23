@@ -58,8 +58,6 @@ body {
     width: 100%;
     height: 100%;
     z-index: 10;
-    display: none;
-    /* Hidden by default */
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.5s ease-in-out;
@@ -2462,10 +2460,6 @@ input[type="range"]::-webkit-slider-thumb {
     border-radius: 0;
     padding: 25px 10px;
     margin: 0;
-    display: block !important;
-    /* Force visibility */
-    opacity: 1 !important;
-    visibility: visible !important;
 }
 
 .desktop-panel .event-card.active {
@@ -2479,11 +2473,8 @@ input[type="range"]::-webkit-slider-thumb {
 /* Mini globe wrapper */
 .desktop-panel .mini-globe-wrapper {
     width: 100%;
-    /* Responsive height with max limit */
-    height: 35vh;
-    max-height: 350px;
-    min-height: 200px;
-
+    height: 450px;
+    /* Even Taller area */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -2939,33 +2930,27 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 /* 2D Leaflet Map layer */
-/* Hybrid Engine Maps */
-#desktopLeafletMap,
-#mobileLeafletMap {
+#desktopLeafletMap {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     z-index: 10;
+    /* Above globe during transition */
     opacity: 0;
-    display: none;
-    /* Hidden by default */
     pointer-events: none;
     transition: opacity 0.5s ease-in-out;
     border-radius: 12px;
 }
 
-#desktopLeafletMap.active,
-#mobileLeafletMap.active {
+#desktopLeafletMap.active {
     opacity: 1;
     pointer-events: auto;
-    display: block;
 }
 
 /* Leaflet Map Custom Styling */
-#desktopLeafletMap .leaflet-container,
-#mobileLeafletMap .leaflet-container {
+#desktopLeafletMap .leaflet-container {
     background: #1a1a2e;
     border-radius: 12px;
 }
