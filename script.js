@@ -790,6 +790,20 @@ window.addEventListener('resize', () => {
     setTimeout(updatePrismaGeometry, 100);
 });
 
+// Invalidate side faces to force reload on next rotation (Sync Logic)
+function invalidatePrismaSideFaces() {
+    // Only clear if we are in phone mode (Desktop handles its own sync)
+    if (prismaMode !== 'phone') return;
+
+    const colPais = document.querySelector('#prismaColPais .col-articles');
+    const colMundo = document.querySelector('#prismaColMundo .col-articles');
+    if (colPais) colPais.innerHTML = '<div class="spinner"></div>';
+    if (colMundo) colMundo.innerHTML = '<div class="spinner"></div>';
+
+    const timeline = document.getElementById('verticalTimeline');
+    if (timeline) timeline.innerHTML = '<div class="spinner"></div>';
+}
+
 function rotatePrismaTo(faceIndex) {
     const prisma = document.querySelector('.prisma');
     if (!prisma) return;
@@ -952,6 +966,9 @@ function handlePrismaEventsScroll() {
                 updatePrismaEventHeader(index);
                 updateTimelineActiveNode(prismaHechos[index]?.id);
                 updateMiniGlobePosition(index);
+
+                // CRITICAL: Invalidate other faces in Phone Mode
+                invalidatePrismaSideFaces();
             }
         } else {
             card.classList.remove('active');
@@ -1217,6 +1234,9 @@ function renderVerticalTimeline(hechos, activeIndex) {
                 currentHechoIndex = prismaMatchIndex;
                 updatePrismaEventHeader(currentHechoIndex);
 
+                // CRITICAL: Invalidate other faces when selecting from timeline
+                invalidatePrismaSideFaces();
+
                 // Rotate to events view (Face 1)
                 rotatePrismaTo(1);
 
@@ -1435,16 +1455,31 @@ function initPrisma() {
             // bypassing potential event targeting issues on 3D elements.
             const actualTarget = document.elementFromPoint(touch.clientX, touch.clientY);
 
+            let prefersScroll = false;
             if (actualTarget) {
-                // IGNORE GLOBE ZONES
-                // Considers: The Canvas, the Wrapper, or any child of wrapper
+                // HARD IGNORE GLOBE (Always native)
                 if (actualTarget.closest('#miniGlobe') ||
                     actualTarget.closest('.mini-globe-wrapper') ||
                     actualTarget.tagName === 'CANVAS') {
                     isIgnoreInteraction = true;
                     return;
                 }
+
+                // PREFER SCROLL ON CONTENT (Be more lenient with verticality)
+                if (actualTarget.closest('.prisma-face') ||
+                    actualTarget.closest('.events-scroll-container') ||
+                    actualTarget.closest('.vertical-timeline') ||
+                    actualTarget.closest('.comparison-col')) {
+                    prefersScroll = true;
+                }
             }
+
+            // Track state on start
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            currentRotationAtStart = prismaRotation;
+            startFaceIndex = currentPrismaFace;
+            prismaContainer.dataset.prefersScroll = prefersScroll;
 
             // Do NOT disable transition yet. Wait until we confirm horizontal drag.
         }, { passive: true });
@@ -1458,27 +1493,31 @@ function initPrisma() {
             const diffX = touch.clientX - touchStartX;
             const diffY = touch.clientY - touchStartY;
 
+            const prefersScroll = prismaContainer.dataset.prefersScroll === 'true';
+
             // Axis Locking Logic (First Move Decision)
             if (!isDragging) {
                 const absX = Math.abs(diffX);
                 const absY = Math.abs(diffY);
                 const totalDist = Math.sqrt(absX * absX + absY * absY);
 
-                // Ignore micro-movements (jitter)
                 if (totalDist < 5) return;
 
                 // Priority to Vertical Scroll
-                // If moving vertically significantly, or just more than horizontally
-                if (absY > absX) {
-                    isScrolling = true; // Lock as scroll
-                    return; // EXIT and let browser scroll
+                // If touching content, we are extremely lenient (absY > absX * 0.5)
+                const scrollBias = prefersScroll ? 0.5 : 1.0;
+                if (absY > absX * scrollBias) {
+                    isScrolling = true;
+                    isIgnoreInteraction = true;
+                    return;
                 }
 
-                // If moving horizontally (Must exceed slightly higher threshold)
-                // Threshold 10px to prevent accidental swipes
-                if (absX > 10) {
+                // If moving horizontally (Must exceed threshold)
+                // If touching content, we require a larger move to avoid accidental swipes
+                const swipeThreshold = prefersScroll ? 30 : 10;
+                if (absX > swipeThreshold) {
                     isDragging = true;
-                    prisma.style.transition = 'none'; // NOW disable transition for 1:1 control
+                    prisma.style.transition = 'none';
                 }
             }
 
