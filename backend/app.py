@@ -273,6 +273,21 @@ def get_dates():
         return jsonify([])
 
 @app.route('/api/macros', methods=['GET'])
+def get_macros():
+    """Get all EventoMacro with counts"""
+    query = """
+    MATCH (m:EventoMacro)<-[:PARTE_DE]-(h:Hecho)
+    RETURN m.nombre as nombre, m.descripcion as descripcion, count(h) as hechos_count
+    ORDER BY hechos_count DESC
+    """
+    try:
+        with driver.session(database=DATABASE) as session:
+            result = session.run(query)
+            macros = [{"nombre": record["nombre"], "descripcion": record["descripcion"], "hechos_count": record["hechos_count"]} for record in result]
+            return jsonify(macros)
+    except Exception as e:
+        print(f"Error getting macros: {e}")
+        return jsonify([])
 
 @app.route('/api/timeline/<macro_name>', methods=['GET'])
 def get_timeline(macro_name):
