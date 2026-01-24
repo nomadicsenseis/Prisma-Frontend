@@ -1067,6 +1067,9 @@ function renderPrismaEvents(hechos) {
 }
 
 function handlePrismaEventsScroll() {
+    // CRITICAL: Prevent Phone Scroll logic from hijacking state if we are in Desktop Mode
+    if (prismaMode !== 'phone') return;
+
     if (isPrismaNavigating) return; // Don't trigger updates during purposeful navigation
 
     const container = document.getElementById('eventsContainer');
@@ -1362,6 +1365,26 @@ function renderVerticalTimeline(hechos, activeIndex) {
                 isPrismaNavigating = true;
                 currentHechoIndex = prismaMatchIndex;
                 updatePrismaEventHeader(currentHechoIndex);
+
+                // Assign global index
+                // If checking exact match failed, default to 0 (but usually it matches)
+                currentHechoIndex = prismaMatchIndex >= 0 ? prismaMatchIndex : 0;
+
+                // PRE-SCROLL: Force the Desktop container to align perfectly BEFORE the face rotates into view.
+                // This prevents "jumping" because the scroll happens while the element is technically hidden/moving.
+                if (prismaMode === 'desktop') {
+                    // Determine container (it was just rendered in syncDesktopPanels possibly)
+                    const dContainer = document.getElementById('desktopEventsContainer');
+                    if (dContainer) {
+                        const dCard = dContainer.querySelector(`[data-index="${currentHechoIndex}"]`);
+                        if (dCard) {
+                            // Disable snap temporarily to allow instant precise set
+                            dContainer.style.scrollSnapType = 'none';
+                            dCard.scrollIntoView({ block: 'center', behavior: 'auto' });
+                            // We don't need to restore snap immediately, rotatePrismaTo will handle cleanup/restoration
+                        }
+                    }
+                }
 
                 // CRITICAL: Invalidate other faces when selecting from timeline
                 invalidatePrismaSideFaces();
