@@ -911,16 +911,62 @@ function rotatePrismaTo(faceIndex, fromDesktopFocus = false) {
         prisma.classList.remove('rotating');
 
         // RE-ALIGNMENT: If returning to Events Face (1), force list to match currentHechoIndex
+        // We use INSTANT scrollTop calculation instead of scrollIntoView to avoid "wiggle" or animation conflicts
         if (normalizedIndex === 1) {
             const container = document.getElementById('desktopEventsContainer') || document.getElementById('eventsContainer');
             const card = container?.querySelector(`[data-index="${currentHechoIndex}"]`);
-            if (card) {
-                card.scrollIntoView({ block: 'center' });
+            if (card && container) {
+                // BACK TO MATH: scrollIntoView is unreliable with complex masking/padding.
+                // We calculate precise pixel offsets manually.
+
+                // 1. Temporarily disable scroll-snap to prevent interference
+                container.style.scrollSnapType = 'none';
+
+                // 2. FORCE "TRUE" GEOMETRY: Remove any transforms that might skew measurement
+                // caching original values to restore if needed (though we usually just remove classes)
+                const originalTransition = card.style.transition;
+                const originalTransform = card.style.transform;
+
+                card.style.transition = 'none';
+                card.style.transform = 'none';
+
+                const containerRect = container.getBoundingClientRect();
+                const cardRect = card.getBoundingClientRect();
+
+                // Calculate where the card IS vs where it SHOULD be
+                const currentDiff = cardRect.top - containerRect.top;
+                const desiredDiff = (containerRect.height - cardRect.height) / 2;
+                const delta = currentDiff - desiredDiff;
+
+                console.log('📏 Re-Align Debug:', {
+                    cardTop: cardRect.top,
+                    containerTop: containerRect.top,
+                    currentDiff,
+                    desiredDiff,
+                    delta,
+                    scrollTopBefore: container.scrollTop
+                });
+
+                container.scrollTop += delta;
+
+                // 3. Restore visual state
+                card.style.transition = originalTransition;
+                card.style.transform = originalTransform;
+
+                // Restore snap after a GENEROUS delay to let the scroll settle
+                setTimeout(() => {
+                    container.style.scrollSnapType = 'y mandatory';
+                }, 150);
             }
         }
 
-        // Release Lock
-        isPrismaNavigating = false;
+        // Release Lock AFTER the scroll actions have processed
+        // We use a microtask delay to ensure the scroll event from the line above 
+        // is caught by the listener while isPrismaNavigating is still true.
+        requestAnimationFrame(() => {
+            isPrismaNavigating = false;
+            targetHechoIndex = -1;
+        });
     }, 600); // Match CSS transition duration
 
     // Load data for specific face if needed (AVOID RELOADING if already visible)
@@ -1258,6 +1304,10 @@ function renderVerticalTimeline(hechos, activeIndex) {
         node.onclick = async (e) => {
             e.stopPropagation();
 
+            // CRITICAL: Lock navigation IMMEDIATELY to prevent scroll events 
+            // from sorting/rendering updates to overwrite our target state.
+            isPrismaNavigating = true;
+
             // Highlight this node immediately
             document.querySelectorAll('.timeline-node').forEach(n => n.classList.remove('active'));
             node.classList.add('active');
@@ -1324,27 +1374,9 @@ function renderVerticalTimeline(hechos, activeIndex) {
                 // Rotate to events view (Face 1)
                 rotatePrismaTo(1);
 
-                // Scroll to target card in Face 1 (with enough delay for 3D transition)
-                setTimeout(() => {
-                    const container = document.getElementById('eventsContainer');
-                    const cards = container?.querySelectorAll('.event-card');
-                    const card = container?.querySelector(`[data-index="${currentHechoIndex}"]`);
-
-                    if (card && container) {
-                        // Clear all active first and set the target one
-                        cards.forEach(c => c.classList.remove('active'));
-                        card.classList.add('active');
-
-                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        console.log('Scrolled to card index:', currentHechoIndex);
-                    }
-
-                    // Reset flag after transition finishes
-                    setTimeout(() => {
-                        isPrismaNavigating = false;
-                        console.log('Navigation lock released');
-                    }, 1200);
-                }, 700);
+                // NOTE: Scroll re-alignment and lock release are now handled centrally 
+                // by rotatePrismaTo() to ensure consistency and prevent "wiggles".
+                // We do NOT manually scroll here anymore.
             }
         };
         timeline.appendChild(node);
@@ -2059,6 +2091,26 @@ function focusDesktopPanel(index) {
     // Wrap around 0-2 (Comparison=0, Events=1, Timeline=2)
     desktopFocusIndex = ((index % 3) + 3) % 3;
 
+    // SMART SYNC: If moving TO Events (1) from any other face,
+    // we double-check if the Timeline (which was arguably just visible) has a selection.
+    // This handles the case where the user "Selected" something in the Timeline 
+    // but the system state didn't persist it for some reason (e.g. scroll vs click ambiguity).
+    if (desktopFocusIndex === 1) {
+        const activeNode = document.querySelector('.timeline-node.active');
+        if (activeNode) {
+            // Extract ID from the active node's header
+            const title = activeNode.querySelector('h4')?.textContent;
+            if (title) {
+                const matchIndex = prismaHechos.findIndex(h => h.id === title);
+                // If we found a valid match AND it is different from what the system thinks is active...
+                if (matchIndex >= 0 && matchIndex !== currentHechoIndex) {
+                    console.log('🔄 Syncing Events View to Active Timeline Selection:', matchIndex);
+                    currentHechoIndex = matchIndex;
+                }
+            }
+        }
+    }
+
     // CRITICAL FIX: Keep Global State in Sync
     currentPrismaFace = desktopFocusIndex;
 
@@ -2186,8 +2238,23 @@ function syncDesktopEvents() {
         `).join('');
 
         // Ensure ONLY one listener exists
+        // Ensure ONLY one listener exists
         container.removeEventListener('scroll', handleDesktopEventsScroll);
         container.addEventListener('scroll', handleDesktopEventsScroll);
+
+        // SAFETY BREAKERS: Force unlock on user interaction
+        // This ensures the user is never "stuck" due to a logic bug
+        const forceUnlock = () => {
+            if (targetHechoIndex !== -1 || isPrismaNavigating) {
+                console.log('✋ Manual interaction detected: Force Unlocking Navigation');
+                targetHechoIndex = -1;
+                isPrismaNavigating = false;
+            }
+        };
+        // Use 'on' properties to prevent listener duplication
+        container.onmousedown = forceUnlock;
+        container.ontouchstart = forceUnlock;
+        container.onwheel = forceUnlock;
     } else {
         // Just update classes
         const cards = container.querySelectorAll('.event-card');
