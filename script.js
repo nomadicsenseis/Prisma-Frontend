@@ -12,6 +12,11 @@ let prismaHechos = [];
 let currentPrismaFace = 0;
 let currentHechoIndex = 0;
 let isPrismaNavigating = false;
+let targetHechoIndex = -1; // For robust Desktop navigation
+
+// Desktop Sync Cache
+let lastDesktopComparisonId = null;
+let lastDesktopTimelineMacro = null;
 
 // Expose to window for debugging and external access
 window.prismaHechos = prismaHechos;
@@ -792,9 +797,8 @@ window.addEventListener('resize', () => {
 
 // Invalidate side faces to force reload on next rotation (Sync Logic)
 function invalidatePrismaSideFaces() {
-    // Only clear if we are in phone mode (Desktop handles its own sync)
-    if (prismaMode !== 'phone') return;
-
+    // ALWAYS clear side faces if they exist, regardless of mode, 
+    // ensuring the Simulator stays in sync with Desktop panels.
     const colPais = document.querySelector('#prismaColPais .col-articles');
     const colMundo = document.querySelector('#prismaColMundo .col-articles');
     if (colPais) colPais.innerHTML = '<div class="spinner"></div>';
@@ -804,9 +808,72 @@ function invalidatePrismaSideFaces() {
     if (timeline) timeline.innerHTML = '<div class="spinner"></div>';
 }
 
-function rotatePrismaTo(faceIndex) {
+function rotatePrismaTo(faceIndex, fromDesktopFocus = false) {
     const prisma = document.querySelector('.prisma');
     if (!prisma) return;
+
+    // ROTATION LOCK: Prevent scroll events from firing during 3D transition
+    isPrismaNavigating = true;
+
+    // SYNC BACK TO DESKTOP PANELS
+    // If this rotation wasn't triggered BY the desktop panel logic, 
+    // we must update the desktop panel to match this new face.
+    if (prismaMode === 'desktop' && !fromDesktopFocus) {
+        // This will call us back with fromDesktopFocus=true, establishing the loop but we return early below
+        // Actually, focusDesktopPanel calls rotatePrismaTo.
+        // So if we call focusDesktopPanel, it will call rotatePrismaTo again.
+        // We need to be careful.
+        // BETTER STRATEGY: Update the variables but DON'T call focusDesktopPanel recursively if we can avoid it, 
+        // OR rely on focusDesktopPanel to be the 'source of truth' logic.
+
+        // Let's just update the visual focus without re-triggering logic
+        // Or better: Let focusDesktopPanel handle the logic if we are in desktop mode.
+        // But rotatePrismaTo controls the animation.
+
+        // Simplest: If in desktop mode and NOT from focus, just update the index reference
+        // so focusDesktopPanel knows where to go if called later? 
+        // No, we need the UI to update.
+
+        // Let's call focusDesktopPanel but prevent it from calling us back?
+        // focusDesktopPanel calls rotatePrismaTo.
+        // We can just update the UI classes manually here? No, duplicate logic.
+
+        // Safe approach: Call focusDesktopPanel but ensure ITS call to rotatePrismaTo doesn't re-animate.
+        // But focusDesktopPanel(index) calls rotatePrismaTo(index).
+        // If we are here, we are already rotating.
+
+        // Since focusDesktopPanel is purely DOM class manipulation + syncDesktopPanels (data), 
+        // we can probably just run those parts?
+        // Let's just defer to focusDesktopPanel and RETURN if we are in desktop mode and not from it?
+        // No, because rotatePrismaTo does the CSS transform.
+
+        // Solution: Call focusDesktopPanel, but check inside focusDesktopPanel if we are already rotating?
+        // Or simply: Update the global index vars here yourself.
+
+        // We will just update the visual classes for panels manually here to avoid recursion hell
+        // IF we are in desktop mode.
+        if (prismaMode === 'desktop') {
+            desktopFocusIndex = ((faceIndex % 3) + 3) % 3;
+            // Visually update panels without triggering full logic loop
+            const panels = document.querySelectorAll('.desktop-panel');
+            panels.forEach((panel) => {
+                const i = parseInt(panel.dataset.panel);
+                panel.classList.remove('focused', 'left', 'right');
+                if (i === desktopFocusIndex) {
+                    panel.classList.add('focused');
+                    panel.style.order = 2;
+                } else if (i === (desktopFocusIndex - 1 + 3) % 3) {
+                    panel.classList.add('left');
+                    panel.style.order = 1;
+                } else {
+                    panel.classList.add('right');
+                    panel.style.order = 3;
+                }
+            });
+            // Sync data
+            syncDesktopPanels();
+        }
+    }
 
     // Add rotating class for depth effect
     prisma.classList.add('rotating');
@@ -842,6 +909,18 @@ function rotatePrismaTo(faceIndex) {
     // Remove rotating class after transition
     setTimeout(() => {
         prisma.classList.remove('rotating');
+
+        // RE-ALIGNMENT: If returning to Events Face (1), force list to match currentHechoIndex
+        if (normalizedIndex === 1) {
+            const container = document.getElementById('desktopEventsContainer') || document.getElementById('eventsContainer');
+            const card = container?.querySelector(`[data-index="${currentHechoIndex}"]`);
+            if (card) {
+                card.scrollIntoView({ block: 'center' });
+            }
+        }
+
+        // Release Lock
+        isPrismaNavigating = false;
     }, 600); // Match CSS transition duration
 
     // Load data for specific face if needed (AVOID RELOADING if already visible)
@@ -1236,6 +1315,11 @@ function renderVerticalTimeline(hechos, activeIndex) {
 
                 // CRITICAL: Invalidate other faces when selecting from timeline
                 invalidatePrismaSideFaces();
+
+                // Desktop Sync: If in desktop mode, also update panels
+                if (prismaMode === 'desktop') {
+                    syncDesktopPanels();
+                }
 
                 // Rotate to events view (Face 1)
                 rotatePrismaTo(1);
@@ -1853,6 +1937,10 @@ function switchViewMode(mode) {
     // STEP 3: Update toggle buttons
     updateModeToggle(mode);
 
+    // RESET Desktop Sync Caches to ensure coherent state on mode change
+    lastDesktopComparisonId = null;
+    lastDesktopTimelineMacro = null;
+
     // Re-initialize Lucide icons
     if (window.lucide) lucide.createIcons();
 }
@@ -1971,6 +2059,9 @@ function focusDesktopPanel(index) {
     // Wrap around 0-2 (Comparison=0, Events=1, Timeline=2)
     desktopFocusIndex = ((index % 3) + 3) % 3;
 
+    // CRITICAL FIX: Keep Global State in Sync
+    currentPrismaFace = desktopFocusIndex;
+
     const panels = document.querySelectorAll('.desktop-panel');
     panels.forEach((panel) => {
         const i = parseInt(panel.dataset.panel);
@@ -1992,6 +2083,11 @@ function focusDesktopPanel(index) {
             panel.style.order = 3;
         }
     });
+
+    // Also rotate the hidden/visible prism to match, ensuring state consistency
+    // This effectively locks/unlocks the correct scroll handlers via currentPrismaFace
+    // We pass 'skipFocus' true to avoid infinite recursion if rotatePrismaTo calls back
+    rotatePrismaTo(desktopFocusIndex, true);
 
     // Update content based on current state when focus changes
     syncDesktopPanels();
@@ -2021,6 +2117,10 @@ function syncDesktopPanels() {
 
 async function syncDesktopComparison(hecho) {
     if (!hecho) return;
+
+    // CACHE CHECK: Don't reload if it's the same event
+    if (lastDesktopComparisonId === hecho.id) return;
+    lastDesktopComparisonId = hecho.id;
 
     const titleEl = document.getElementById('desktopComparisonTitle');
     if (titleEl) titleEl.textContent = hecho.id;
@@ -2074,20 +2174,36 @@ function syncDesktopEvents() {
     const container = document.getElementById('desktopEventsContainer');
     if (!container) return;
 
-    container.innerHTML = prismaHechos.map((h, index) => `
-        <div class="event-card ${index === currentHechoIndex ? 'active' : ''}" data-index="${index}">
-            <span class="event-tag">DATOS DEL HECHO</span>
-            <h3>${h.id}</h3>
-            <p>${h.text}</p>
-            <div class="event-date">${h.date || ''}</div>
-        </div>
-    `).join('');
+    // ONLY render if the list is empty or the count changed (prevents loop)
+    if (container.children.length !== prismaHechos.length) {
+        container.innerHTML = prismaHechos.map((h, index) => `
+            <div class="event-card ${index === currentHechoIndex ? 'active' : ''}" data-index="${index}">
+                <span class="event-tag">DATOS DEL HECHO</span>
+                <h3>${h.id}</h3>
+                <p>${h.text}</p>
+                <div class="event-date">${h.date || ''}</div>
+            </div>
+        `).join('');
 
-    // Scroll detection for desktop events
-    container.addEventListener('scroll', handleDesktopEventsScroll);
+        // Ensure ONLY one listener exists
+        container.removeEventListener('scroll', handleDesktopEventsScroll);
+        container.addEventListener('scroll', handleDesktopEventsScroll);
+    } else {
+        // Just update classes
+        const cards = container.querySelectorAll('.event-card');
+        cards.forEach((card, idx) => {
+            card.classList.toggle('active', idx === currentHechoIndex);
+        });
+    }
 }
 
 function handleDesktopEventsScroll() {
+    // CRITICAL 1: Block scroll sync while programmatically navigating
+    // UNLESS we have reached our target (handled below)
+
+    // CRITICAL 2: Only sync if we are looking at the Events Face (Face 1)
+    if (currentPrismaFace !== 1) return;
+
     const container = document.getElementById('desktopEventsContainer');
     if (!container) return;
 
@@ -2095,31 +2211,63 @@ function handleDesktopEventsScroll() {
     const containerRect = container.getBoundingClientRect();
     const containerCenter = containerRect.top + containerRect.height / 2;
 
+    let closestIndex = -1;
+    let minDistance = Infinity;
+
     cards.forEach((card, index) => {
         const rect = card.getBoundingClientRect();
         const cardCenter = rect.top + rect.height / 2;
-        const distanceFromCenter = Math.abs(containerCenter - cardCenter);
-        const threshold = rect.height / 2;
-
-        if (distanceFromCenter < threshold) {
-            card.classList.add('active');
-            if (currentHechoIndex !== index) {
-                currentHechoIndex = index;
-                // Update mini globe
-                updateDesktopMiniGlobePosition(index);
-                // Sync other panels without re-syncing events
-                const currentHecho = prismaHechos[index];
-                if (currentHecho) {
-                    syncDesktopComparison(currentHecho);
-                    syncDesktopTimeline(currentHecho);
-                    document.getElementById('desktopEventTitle').textContent = currentHecho.macroevento || 'Evento';
-                    document.getElementById('desktopEventDate').textContent = currentHecho.date || '';
-                }
-            }
-        } else {
-            card.classList.remove('active');
+        const distance = Math.abs(containerCenter - cardCenter);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestIndex = index;
         }
     });
+
+    // CRITICAL 3: TARGET LOCK
+    // If we have a target, IGNORE everything until we are close to it.
+    if (targetHechoIndex !== -1) {
+        if (closestIndex === targetHechoIndex && minDistance < 150) {
+            // We arrived! Release the lock.
+            isPrismaNavigating = false;
+            targetHechoIndex = -1;
+            console.log('🎯 Target Lock Released: Arrived at', closestIndex);
+        } else {
+            // We are likely scrolling past intermediate cards. Ignore.
+            return;
+        }
+    } else if (isPrismaNavigating) {
+        // Fallback for safety
+        return;
+    }
+
+    // Precision Threshold: Only update if the closest card is actually near the center
+    if (closestIndex !== -1 && minDistance < 150) {
+        if (currentHechoIndex !== closestIndex) {
+            currentHechoIndex = closestIndex;
+
+            // Update active state in UI
+            cards.forEach((c, i) => c.classList.toggle('active', i === closestIndex));
+
+            // Synchronize all views
+            const currentHecho = prismaHechos[closestIndex];
+            if (currentHecho) {
+                syncDesktopComparison(currentHecho);
+                syncDesktopTimeline(currentHecho);
+
+                // Update Headers
+                const titleEl = document.getElementById('desktopEventTitle');
+                const dateEl = document.getElementById('desktopEventDate');
+                if (titleEl) titleEl.textContent = currentHecho.macroevento || 'Evento';
+                if (dateEl) dateEl.textContent = currentHecho.date || '';
+
+                // Keep simulator & mini globe in sync
+                invalidatePrismaSideFaces();
+                updatePrismaEventHeader(closestIndex);
+                updateDesktopMiniGlobePosition(closestIndex);
+            }
+        }
+    }
 }
 
 async function syncDesktopTimeline(hecho) {
@@ -2128,6 +2276,18 @@ async function syncDesktopTimeline(hecho) {
     if (!timeline || !hecho) return;
 
     const macroName = hecho.macroevento;
+
+    // CACHE CHECK: Don't reload timeline if it's the same macro
+    if (lastDesktopTimelineMacro === macroName) {
+        // Just update active node highlight
+        const activeNode = timeline.querySelector('.timeline-node.active');
+        if (activeNode) activeNode.classList.remove('active');
+        const newNode = timeline.querySelector(`[data-id="${hecho.id}"]`);
+        if (newNode) newNode.classList.add('active');
+        return;
+    }
+    lastDesktopTimelineMacro = macroName;
+
     if (titleEl) titleEl.textContent = macroName || 'Línea Temporal';
 
     if (!macroName || macroName === 'Sin clasificar') {
@@ -2162,6 +2322,9 @@ function renderDesktopVerticalTimeline(hechos, activeIndex) {
     // Click handler for timeline nodes
     timeline.querySelectorAll('.timeline-node').forEach((node, index) => {
         node.addEventListener('click', () => {
+            // SET LOCK IMMEDIATELY to prevent scroll interference
+            isPrismaNavigating = true;
+
             // Find in prismaHechos or inject
             let matchIdx = prismaHechos.findIndex(ph => ph.id === hechos[index].id);
             if (matchIdx < 0) {
@@ -2175,12 +2338,37 @@ function renderDesktopVerticalTimeline(hechos, activeIndex) {
                 matchIdx = prismaHechos.length - 1;
             }
             currentHechoIndex = matchIdx;
-            syncDesktopPanels();
 
-            // Scroll events to this card
+            // TARGET LOCK START: Tell the scroll handler where we are going
+            targetHechoIndex = matchIdx;
+
+            // Sync Desktop Panels (Atomic Update)
+            syncDesktopPanels();
+            invalidatePrismaSideFaces();
+
+            // Scroll events to this card (Center)
             const eventsContainer = document.getElementById('desktopEventsContainer');
-            const card = eventsContainer?.querySelector(`[data-index="${matchIdx}"]`);
-            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (eventsContainer) {
+                const card = eventsContainer.querySelector(`[data-index="${matchIdx}"]`);
+                if (card) {
+                    // Start smooth scroll
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    // Fallback timeout just in case scroll never finishes
+                    setTimeout(() => {
+                        if (isPrismaNavigating) {
+                            isPrismaNavigating = false;
+                            targetHechoIndex = -1;
+                        }
+                    }, 1200);
+                } else {
+                    isPrismaNavigating = false;
+                    targetHechoIndex = -1;
+                }
+            } else {
+                isPrismaNavigating = false;
+                targetHechoIndex = -1;
+            }
         });
     });
 
