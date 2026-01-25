@@ -871,7 +871,9 @@ function rotatePrismaTo(faceIndex, fromDesktopFocus = false) {
                 }
             });
             // Sync data
-            syncDesktopPanels();
+            // REDUNDANT: syncDesktopPanels() re-renders the DOM, causing the "wiggle".
+            // We should only sync when DATA changes (timeline click), not on visual rotation.
+            // syncDesktopPanels();
         }
     }
 
@@ -916,47 +918,23 @@ function rotatePrismaTo(faceIndex, fromDesktopFocus = false) {
             const container = document.getElementById('desktopEventsContainer') || document.getElementById('eventsContainer');
             const card = container?.querySelector(`[data-index="${currentHechoIndex}"]`);
             if (card && container) {
-                // BACK TO MATH: scrollIntoView is unreliable with complex masking/padding.
-                // We calculate precise pixel offsets manually.
-
-                // 1. Temporarily disable scroll-snap to prevent interference
-                container.style.scrollSnapType = 'none';
-
-                // 2. FORCE "TRUE" GEOMETRY: Remove any transforms that might skew measurement
-                // caching original values to restore if needed (though we usually just remove classes)
-                const originalTransition = card.style.transition;
-                const originalTransform = card.style.transform;
-
-                card.style.transition = 'none';
-                card.style.transform = 'none';
-
+                // MEASURE FIRST: Calculate delta without touching any styles
                 const containerRect = container.getBoundingClientRect();
                 const cardRect = card.getBoundingClientRect();
-
-                // Calculate where the card IS vs where it SHOULD be
                 const currentDiff = cardRect.top - containerRect.top;
                 const desiredDiff = (containerRect.height - cardRect.height) / 2;
                 const delta = currentDiff - desiredDiff;
 
-                console.log('📏 Re-Align Debug:', {
-                    cardTop: cardRect.top,
-                    containerTop: containerRect.top,
-                    currentDiff,
-                    desiredDiff,
-                    delta,
-                    scrollTopBefore: container.scrollTop
-                });
-
-                container.scrollTop += delta;
-
-                // 3. Restore visual state
-                card.style.transition = originalTransition;
-                card.style.transform = originalTransform;
-
-                // Restore snap after a GENEROUS delay to let the scroll settle
-                setTimeout(() => {
-                    container.style.scrollSnapType = 'y mandatory';
-                }, 150);
+                // ONLY intervene if misalignment is significant (>2px)
+                if (Math.abs(delta) > 2) {
+                    console.log('⚠️ Misaligned by', delta, '- Correcting...');
+                    container.style.scrollSnapType = 'none';
+                    container.scrollTop += delta;
+                    setTimeout(() => {
+                        container.style.scrollSnapType = 'y mandatory';
+                    }, 150);
+                }
+                // If aligned, do absolutely nothing
             }
         }
 
@@ -1318,6 +1296,10 @@ function renderVerticalTimeline(hechos, activeIndex) {
             // Find current match
             let prismaMatchIndex = prismaHechos.findIndex(ph => ph.id === h.id);
 
+            // CRITICAL: Preserve the "Anchor" event (the one we are currently looking at)
+            // so we can place the new selection relative to it.
+            const anchorHecho = prismaHechos[currentHechoIndex];
+
             // FETCH CONTEXT: Get other events from the same date to allow scrolling context
             if (h.date) {
                 try {
@@ -1327,39 +1309,58 @@ function renderVerticalTimeline(hechos, activeIndex) {
                     // Merge context hechos avoiding duplicates
                     contextHechos.forEach(ch => {
                         if (!prismaHechos.some(ph => ph.id === ch.id)) {
+                            // Just append context at the end to avoid disturbing flow
                             prismaHechos.push(ch);
                         }
                     });
 
-                    // Sort by date descending to maintain timeline order
-                    prismaHechos.sort((a, b) => new Date(b.date) - new Date(a.date));
+                    // REMOVED: prismaHechos.sort(...)
+                    // User Request: Do NOT re-sort by date. We want custom "Reading Flow" order.
 
-                    // Re-render feed so the context is physically there for scrolling
-                    renderPrismaEvents(prismaHechos);
-
-                    // Re-calculate index as it might have moved or been newly added
-                    prismaMatchIndex = prismaHechos.findIndex(ph => ph.id === h.id);
                 } catch (err) {
                     console.error('Error fetching contextual events:', err);
                 }
             }
 
 
-            // If not found, inject it dynamically to the current feed
-            if (prismaMatchIndex < 0) {
-                console.log('Event not in feed, injecting dynamically:', h.id);
-                // We create a full hecho object from the timeline node data
+            // LOCATE & MOVE LOGIC
+            let matchIndex = prismaHechos.findIndex(ph => ph.id === h.id);
+
+            // If not found, create and insert it
+            if (matchIndex < 0) {
                 const newHecho = {
                     id: h.id,
                     date: h.date,
                     text: h.text || 'Descripción no disponible',
                     macroevento: document.getElementById('timelineMacroTitle')?.textContent || 'Evento',
-                    newspapers: [] // Will be loaded dynamically if needed
+                    newspapers: []
                 };
                 prismaHechos.push(newHecho);
-                renderPrismaEvents(prismaHechos); // Re-render feed to include new card
-                prismaMatchIndex = prismaHechos.length - 1;
+                matchIndex = prismaHechos.length - 1;
             }
+
+            // RE-POSITIONING: Force it to be right after the Anchor
+            if (anchorHecho) {
+                const anchorIndex = prismaHechos.findIndex(ph => ph.id === anchorHecho.id);
+                if (anchorIndex >= 0) {
+                    // Extract the target event
+                    const targetHecho = prismaHechos[matchIndex];
+                    prismaHechos.splice(matchIndex, 1); // Remove from old spot
+
+                    // Re-calculate anchor index (it might have shifted if matchIndex < anchorIndex)
+                    const newAnchorIndex = prismaHechos.findIndex(ph => ph.id === anchorHecho.id);
+
+                    // Insert at Anchor + 1
+                    prismaHechos.splice(newAnchorIndex + 1, 0, targetHecho);
+
+                    // Update match index to the new spot
+                    matchIndex = newAnchorIndex + 1;
+                }
+            }
+
+            // Re-render the feed with the new order
+            renderPrismaEvents(prismaHechos);
+            prismaMatchIndex = matchIndex; // Sync local var for downstream logic
 
             if (prismaMatchIndex >= 0) {
                 isPrismaNavigating = true;
@@ -1370,28 +1371,40 @@ function renderVerticalTimeline(hechos, activeIndex) {
                 // If checking exact match failed, default to 0 (but usually it matches)
                 currentHechoIndex = prismaMatchIndex >= 0 ? prismaMatchIndex : 0;
 
-                // PRE-SCROLL: Force the Desktop container to align perfectly BEFORE the face rotates into view.
+                // CRITICAL: Invalidate other faces when selecting from timeline
+                invalidatePrismaSideFaces();
+
+                // Desktop Sync: If in desktop mode, also update panels FIRST (re-renders DOM)
+                if (prismaMode === 'desktop') {
+                    syncDesktopPanels();
+                }
+
+                // PRE-SCROLL: Force the container to align perfectly AFTER sync (DOM is now ready)
                 // This prevents "jumping" because the scroll happens while the element is technically hidden/moving.
                 if (prismaMode === 'desktop') {
-                    // Determine container (it was just rendered in syncDesktopPanels possibly)
                     const dContainer = document.getElementById('desktopEventsContainer');
                     if (dContainer) {
                         const dCard = dContainer.querySelector(`[data-index="${currentHechoIndex}"]`);
                         if (dCard) {
-                            // Disable snap temporarily to allow instant precise set
                             dContainer.style.scrollSnapType = 'none';
                             dCard.scrollIntoView({ block: 'center', behavior: 'auto' });
-                            // We don't need to restore snap immediately, rotatePrismaTo will handle cleanup/restoration
                         }
                     }
                 }
 
-                // CRITICAL: Invalidate other faces when selecting from timeline
-                invalidatePrismaSideFaces();
-
-                // Desktop Sync: If in desktop mode, also update panels
-                if (prismaMode === 'desktop') {
-                    syncDesktopPanels();
+                // PRE-SCROLL for PHONE MODE
+                if (prismaMode === 'phone') {
+                    const phoneContainer = document.getElementById('eventsContainer');
+                    if (phoneContainer) {
+                        const phoneCard = phoneContainer.querySelector(`[data-index="${currentHechoIndex}"]`);
+                        if (phoneCard) {
+                            phoneContainer.style.scrollSnapType = 'none';
+                            phoneCard.scrollIntoView({ block: 'center', behavior: 'auto' });
+                            setTimeout(() => {
+                                phoneContainer.style.scrollSnapType = 'y mandatory';
+                            }, 150);
+                        }
+                    }
                 }
 
                 // Rotate to events view (Face 1)
@@ -2431,18 +2444,42 @@ function renderDesktopVerticalTimeline(hechos, activeIndex) {
             // SET LOCK IMMEDIATELY to prevent scroll interference
             isPrismaNavigating = true;
 
+            // CRITICAL: Preserve the "Anchor" event (the one we are currently looking at)
+            const anchorHecho = prismaHechos[currentHechoIndex];
+
             // Find in prismaHechos or inject
             let matchIdx = prismaHechos.findIndex(ph => ph.id === hechos[index].id);
             if (matchIdx < 0) {
-                prismaHechos.push({
+                const newHecho = {
                     id: hechos[index].id,
                     date: hechos[index].date,
                     text: hechos[index].text || '',
                     macroevento: document.getElementById('desktopTimelineTitle')?.textContent || 'Evento',
                     newspapers: []
-                });
+                };
+                prismaHechos.push(newHecho);
                 matchIdx = prismaHechos.length - 1;
             }
+
+            // RE-POSITIONING: Force it to be right after the Anchor (Insert Next)
+            if (anchorHecho) {
+                const anchorIndex = prismaHechos.findIndex(ph => ph.id === anchorHecho.id);
+                if (anchorIndex >= 0) {
+                    // Extract the target event
+                    const targetHecho = prismaHechos[matchIdx];
+                    prismaHechos.splice(matchIdx, 1); // Remove from old spot
+
+                    // Re-calculate anchor index
+                    const newAnchorIndex = prismaHechos.findIndex(ph => ph.id === anchorHecho.id);
+
+                    // Insert at Anchor + 1
+                    prismaHechos.splice(newAnchorIndex + 1, 0, targetHecho);
+
+                    // Update match index
+                    matchIdx = newAnchorIndex + 1;
+                }
+            }
+
             currentHechoIndex = matchIdx;
 
             // TARGET LOCK START: Tell the scroll handler where we are going
