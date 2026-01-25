@@ -211,12 +211,11 @@
         if (globeCanvas) globeCanvas.style.opacity = 0;
         leafletDiv.style.pointerEvents = 'none';
 
-        // Sync globe position from Leaflet
+        // Sync globe position from Leaflet - use fixed altitude for optimal viewing size
         if (desktopLeafletMap && globeVizRef) {
             const center = desktopLeafletMap.getCenter();
-            const zoom = desktopLeafletMap.getZoom();
-            const altitude = zoomToAltitude(zoom);
-            globeVizRef.pointOfView({ lat: center.lat, lng: center.lng, altitude: altitude }, 0);
+            // Use fixed altitude 2.8 for consistent globe size on return
+            globeVizRef.pointOfView({ lat: center.lat, lng: center.lng, altitude: 2.8 }, 0);
         }
 
         const duration = 1200;

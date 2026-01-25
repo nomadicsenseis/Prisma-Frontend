@@ -2867,7 +2867,7 @@ function initDesktopMiniGlobe() {
         .showAtmosphere(true)
         .atmosphereColor('lightskyblue')
         .atmosphereAltitude(0.18)
-        .pointOfView({ lat: 40.4168, lng: -3.7038, altitude: 4.0 }) // Start high to show globe first
+        .pointOfView({ lat: 40.4168, lng: -3.7038, altitude: 2.8 }) // Start at optimal viewing size
         .htmlElementsData(defaultMarker)
         .htmlLat('lat')
         .htmlLng('lng')
