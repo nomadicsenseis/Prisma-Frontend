@@ -2453,7 +2453,7 @@ input[type="range"]::-webkit-slider-thumb {
 .desktop-panel.panel-events.focused {
     display: grid !important;
     /* Force Grid */
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto minmax(500px, 1fr);  /* Minimum 500px for globe row */
     grid-template-columns: 1fr 1fr;
     /* 50% Text, 50% Globe */
     grid-template-areas:
@@ -2496,6 +2496,7 @@ input[type="range"]::-webkit-slider-thumb {
     left: auto;
     width: 100%;
     height: 100% !important;
+    min-height: 500px !important;  /* Ensure minimum size for globe */
     /* Fill grid height */
     max-height: 100vh;
     /* Prevent overflow */
@@ -2891,7 +2892,7 @@ input[type="range"]::-webkit-slider-thumb {
 #desktopMiniGlobeContainer {
     position: relative;
     width: 100%;
-    min-height: 300px;
+    min-height: 420px;  /* Bigger globe */
     overflow: hidden;
     border-radius: 12px;
     background: rgba(0,0,0,0.2);

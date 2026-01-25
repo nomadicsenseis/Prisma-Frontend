@@ -78,7 +78,28 @@
             }
         });
 
+        // Double-tap: Map -> Globe (same as Globe Mode)
+        desktopLeafletMap.on('dblclick', function () {
+            if (desktopEngineState === 'LOCAL') {
+                console.log('🖥️ Desktop: Double-tap on Map → Globe');
+                transitionToGlobe();
+            }
+        });
+
         console.log('🖥️ Desktop Engine: Leaflet Initialized');
+    }
+
+    // Setup double-tap on Globe canvas
+    function setupGlobeDoubleTap(container) {
+        const canvas = container.querySelector('canvas');
+        if (canvas) {
+            canvas.addEventListener('dblclick', (e) => {
+                if (desktopEngineState === 'ORBITAL' || desktopEngineState === 'PRELOAD') {
+                    console.log('🖥️ Desktop: Double-tap on Globe → Map');
+                    transitionToLeaflet();
+                }
+            });
+        }
     }
 
     // Sync Camera position
@@ -100,35 +121,40 @@
         const parent = document.getElementById('desktopMiniGlobe');
         const globeCanvas = parent ? parent.querySelector('canvas') : null;
 
-        if (desktopLeafletMap) desktopLeafletMap.invalidateSize();
-        syncCamera();
-
-        // Make leaflet visible for transition
+        // IMPORTANT: Make visible FIRST, then sync, then animate
         leafletDiv.style.display = 'block';
+        leafletDiv.style.opacity = '0';
+        
+        // Wait a frame for display to take effect, then sync and start animation
+        requestAnimationFrame(() => {
+            if (desktopLeafletMap) desktopLeafletMap.invalidateSize();
+            syncCamera();
+            
+            // Now start the animation after sync is complete
+            const duration = 1200;
+            const startTime = performance.now();
 
-        const duration = 1200;
-        const startTime = performance.now();
+            function animate() {
+                const elapsed = performance.now() - startTime;
+                const t = Math.min(1, elapsed / duration);
+                const ease = t * t * (3 - 2 * t); // Smoothstep
 
-        function animate() {
-            const elapsed = performance.now() - startTime;
-            const t = Math.min(1, elapsed / duration);
-            const ease = t * t * (3 - 2 * t); // Smoothstep
+                leafletDiv.style.opacity = ease;
+                if (globeCanvas) globeCanvas.style.opacity = 1 - ease;
 
-            leafletDiv.style.opacity = ease;
-            if (globeCanvas) globeCanvas.style.opacity = 1 - ease;
-
-            if (t < 1) {
-                requestAnimationFrame(animate);
-            } else {
-                desktopEngineState = 'LOCAL';
-                leafletDiv.classList.add('active');
-                leafletDiv.style.pointerEvents = 'auto';
-                if (globeCanvas) globeCanvas.style.opacity = 0;
-                desktopTransitionInProgress = false;
-                console.log('🖥️ Desktop Engine: → LOCAL');
+                if (t < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    desktopEngineState = 'LOCAL';
+                    leafletDiv.classList.add('active');
+                    leafletDiv.style.pointerEvents = 'auto';
+                    if (globeCanvas) globeCanvas.style.opacity = 0;
+                    desktopTransitionInProgress = false;
+                    console.log('🖥️ Desktop Engine: → LOCAL');
+                }
             }
-        }
-        requestAnimationFrame(animate);
+            requestAnimationFrame(animate);
+        });
     }
 
     // Transition: Leaflet -> Globe
@@ -181,6 +207,8 @@
         init: function (viz, container) {
             globeVizRef = viz;
             initLeaflet(container);
+            // Setup double-tap after a small delay to ensure canvas is ready
+            setTimeout(() => setupGlobeDoubleTap(container), 500);
         },
 
         checkTransitions: function () {

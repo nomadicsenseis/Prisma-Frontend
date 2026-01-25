@@ -21,8 +21,8 @@ let leafletMarkers = [];
 let transitionInProgress = false;
 
 // Altitude thresholds (relative to globe radius)
-const PRELOAD_ALTITUDE = 1.4;     // Start preloading Leaflet
-const TRANSITION_ALTITUDE = 1.2;  // Begin cross-fade to Leaflet
+const PRELOAD_ALTITUDE = 0.8;     // Start preloading Leaflet (lower = later trigger)
+const TRANSITION_ALTITUDE = 0.4;  // Begin cross-fade to Leaflet (lower = later trigger)
 let currentGlobeAltitude = 2.5;   // Initial starting altitude
 
 // Zoom conversion constants
@@ -529,6 +529,18 @@ function initLeafletMap() {
         transitionToGlobe();
     });
 
+    // Zoom-out: Return to Globe when zoom level gets low enough
+    leafletMap.on('zoomend', function () {
+        if (currentEngineState === ENGINE_STATE.LOCAL) {
+            const zoom = leafletMap.getZoom();
+            console.log(`🗺️ Globe Mode: Zoom level = ${zoom}`);
+            if (zoom <= 4.5) {
+                console.log('🗺️ Globe Mode: Zoom out → returning to Globe');
+                transitionToGlobe();
+            }
+        }
+    });
+
     // Double-tap: Globe -> Map (works in both ORBITAL and PRELOAD states)
     const globeDiv = document.getElementById('globeViz');
     if (globeDiv) {
@@ -540,7 +552,7 @@ function initLeafletMap() {
         });
     }
 
-    console.log('🗺️ Leaflet initialized for Engine Switching (Double Tap Mode)');
+    console.log('🗺️ Leaflet initialized for Engine Switching');
 }
 
 function syncCameraToLeaflet() {
@@ -606,11 +618,14 @@ function checkEngineStateTransitions() {
                 if (mapDiv) {
                     mapDiv.style.display = 'none';
                 }
+            } else if (alt < TRANSITION_ALTITUDE) {
+                // Auto-transition when zooming in past threshold
+                console.log('🌍 Engine State: PRELOAD → TRANSITION (auto-zoom trigger)');
+                transitionToLeaflet();
             } else {
                 // Keep syncing camera while in preload
                 syncCameraToLeaflet();
             }
-            // Note: Auto-transition disabled - using Double Tap instead
             break;
 
         case ENGINE_STATE.LOCAL:
