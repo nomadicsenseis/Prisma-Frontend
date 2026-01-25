@@ -2678,7 +2678,13 @@ async function syncDesktopTimeline(hecho) {
         const activeNode = timeline.querySelector('.timeline-node.active');
         if (activeNode) activeNode.classList.remove('active');
         const newNode = timeline.querySelector(`[data-id="${hecho.id}"]`);
-        if (newNode) newNode.classList.add('active');
+        if (newNode) {
+            newNode.classList.add('active');
+            // FIXED: Also scroll to center the newly active node
+            setTimeout(() => {
+                newNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 50);
+        }
         return;
     }
     lastDesktopTimelineMacro = macroName;
