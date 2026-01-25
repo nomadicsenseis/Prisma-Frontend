@@ -78,27 +78,68 @@
             }
         });
 
-        // Double-tap: Map -> Globe (same as Globe Mode)
+        // Double-tap: Map -> Globe (mouse)
         desktopLeafletMap.on('dblclick', function () {
             if (desktopEngineState === 'LOCAL') {
-                console.log('🖥️ Desktop: Double-tap on Map → Globe');
+                console.log('🖥️ Desktop: Double-click on Map → Globe');
                 transitionToGlobe();
             }
         });
 
-        console.log('🖥️ Desktop Engine: Leaflet Initialized');
+        // Touch double-tap for the map container
+        let mapLastTap = 0;
+        const mapContainer = desktopLeafletMap.getContainer();
+        mapContainer.addEventListener('touchend', function(e) {
+            if (desktopEngineState !== 'LOCAL') return;
+            
+            const currentTime = Date.now();
+            const tapLength = currentTime - mapLastTap;
+            
+            if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
+                e.preventDefault();
+                console.log('🖥️ Desktop: Touch double-tap on Map → Globe');
+                transitionToGlobe();
+                mapLastTap = 0;
+            } else {
+                mapLastTap = currentTime;
+            }
+        }, { passive: false });
+
+        console.log('🖥️ Desktop Engine: Leaflet Initialized (mouse + touch)');
     }
 
-    // Setup double-tap on Globe canvas
+    // Double-tap detection for touch devices
+    const DOUBLE_TAP_DELAY = 300;
+
+    // Setup double-tap on Globe canvas (supports both mouse and touch)
     function setupGlobeDoubleTap(container) {
         const canvas = container.querySelector('canvas');
         if (canvas) {
+            // Mouse double-click
             canvas.addEventListener('dblclick', (e) => {
                 if (desktopEngineState === 'ORBITAL' || desktopEngineState === 'PRELOAD') {
-                    console.log('🖥️ Desktop: Double-tap on Globe → Map');
+                    console.log('🖥️ Desktop: Double-click on Globe → Map');
                     transitionToLeaflet();
                 }
             });
+
+            // Touch double-tap
+            let lastTap = 0;
+            canvas.addEventListener('touchend', (e) => {
+                if (desktopEngineState !== 'ORBITAL' && desktopEngineState !== 'PRELOAD') return;
+                
+                const currentTime = Date.now();
+                const tapLength = currentTime - lastTap;
+                
+                if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
+                    e.preventDefault();
+                    console.log('🖥️ Desktop: Touch double-tap on Globe → Map');
+                    transitionToLeaflet();
+                    lastTap = 0;
+                } else {
+                    lastTap = currentTime;
+                }
+            }, { passive: false });
         }
     }
 
