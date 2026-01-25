@@ -2852,3 +2852,58 @@ input[type="range"]::-webkit-slider-thumb {
         backface-visibility: hidden;
     }
 }
+
+/* =========================================
+   ENGINE SWITCHING: Globe.gl ⇄ Leaflet
+   ========================================= */
+
+#globeViz {
+    transition: opacity 0.5s ease;
+}
+
+#globeViz.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Leaflet Map - Engine Switching overlay */
+#leafletMap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 51;              /* Above globe (50) when visible */
+    opacity: 0;
+    display: none;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+    background: #1a1a2e;      /* Dark background while tiles load */
+}
+
+#leafletMap.active {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Desktop Mode Map Container */
+#desktopMiniGlobeContainer {
+    position: relative;
+    width: 100%;
+    min-height: 300px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.2);
+}
+
+#desktopMiniGlobe {
+    position: relative !important;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#desktopLeafletMap {
+    z-index: 10;
+}
