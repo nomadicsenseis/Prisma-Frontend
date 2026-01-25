@@ -2119,7 +2119,8 @@ function focusDesktopPanel(index) {
     // This handles the case where the user "Selected" something in the Timeline 
     // but the system state didn't persist it for some reason (e.g. scroll vs click ambiguity).
     if (desktopFocusIndex === 1) {
-        const activeNode = document.querySelector('.timeline-node.active');
+        // FIXED: Target desktop timeline specifically to avoid matching phone simulator's timeline
+        const activeNode = document.querySelector('#desktopVerticalTimeline .timeline-node.active');
         if (activeNode) {
             // Extract ID from the active node's header
             const title = activeNode.querySelector('h4')?.textContent;
@@ -2166,6 +2167,21 @@ function focusDesktopPanel(index) {
 
     // Update content based on current state when focus changes
     syncDesktopPanels();
+
+    // SCROLL ALIGNMENT: Force events container to center on current selection when focusing Events panel
+    if (desktopFocusIndex === 1) {
+        requestAnimationFrame(() => {
+            const eventsContainer = document.getElementById('desktopEventsContainer');
+            const targetCard = eventsContainer?.querySelector(`[data-index="${currentHechoIndex}"]`);
+            if (targetCard && eventsContainer) {
+                eventsContainer.style.scrollSnapType = 'none';
+                targetCard.scrollIntoView({ block: 'center', behavior: 'auto' });
+                setTimeout(() => {
+                    eventsContainer.style.scrollSnapType = 'y mandatory';
+                }, 100);
+            }
+        });
+    }
 }
 
 function syncDesktopPanels() {
