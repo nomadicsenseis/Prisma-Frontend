@@ -529,15 +529,22 @@ function initLeafletMap() {
         transitionToGlobe();
     });
 
-    // Zoom-out: Return to Globe when zoom level gets low enough (matches TRANSITION_ALTITUDE)
+    // Track last zoom level for detecting zoom OUT only
+    let lastGlobeMapZoom = null;
+    
+    // Zoom-out: Return to Globe ONLY when zooming OUT past threshold
     leafletMap.on('zoomend', function () {
         if (currentEngineState === ENGINE_STATE.LOCAL) {
             const zoom = leafletMap.getZoom();
-            console.log(`🗺️ Globe Mode: Zoom level = ${zoom}`);
-            if (zoom <= 7) {  // Matches ~0.6 altitude for consistent experience
-                console.log('🗺️ Globe Mode: Zoom out → returning to Globe');
+            console.log(`🗺️ Globe Mode: Zoom level = ${zoom}, last = ${lastGlobeMapZoom}`);
+            
+            // Only return if user is zooming OUT AND below threshold
+            if (lastGlobeMapZoom !== null && zoom < lastGlobeMapZoom && zoom <= 5) {
+                console.log('🗺️ Globe Mode: Zoom OUT detected → returning to Globe');
                 transitionToGlobe();
             }
+            
+            lastGlobeMapZoom = zoom;
         }
     });
 
@@ -643,39 +650,48 @@ function transitionToLeaflet() {
     const leafletDiv = document.getElementById('leafletMap');
     const globeDiv = document.getElementById('globeViz');
 
-    // Force Leaflet to recalculate size
-    if (leafletMap) {
-        leafletMap.invalidateSize();
-    }
-    syncCameraToLeaflet();
-    syncLeafletMarkers();
-
-    // Ensure leaflet is visible for transition
+    // IMPORTANT: Make div visible FIRST, then invalidateSize (needs visible container)
     leafletDiv.style.display = 'block';
+    leafletDiv.style.opacity = '0';
 
-    // Cross-fade animation
-    const duration = 600; // 600ms
-    const startTime = performance.now();
-
-    function animateFade() {
-        const elapsed = performance.now() - startTime;
-        const progress = Math.min(1, elapsed / duration);
-
-        leafletDiv.style.opacity = progress;
-        globeDiv.style.opacity = 1 - progress;
-
-        if (progress < 1) {
-            requestAnimationFrame(animateFade);
-        } else {
-            // Transition complete
-            currentEngineState = ENGINE_STATE.LOCAL;
-            console.log('🗺️ Engine State: TRANSITION → LOCAL (Leaflet active)');
-            globeDiv.classList.add('hidden');
-            leafletDiv.classList.add('active');
-            transitionInProgress = false;
+    // Wait a frame for browser layout, then sync and animate
+    requestAnimationFrame(() => {
+        // NOW we can properly size and position the map
+        if (leafletMap) {
+            leafletMap.invalidateSize();
         }
-    }
-    requestAnimationFrame(animateFade);
+        
+        // Sync camera - use zoom 5 for better overview
+        if (leafletMap && world) {
+            const pov = world.pointOfView();
+            leafletMap.setView([pov.lat, pov.lng], 5, { animate: false });
+        }
+        syncLeafletMarkers();
+
+        // Cross-fade animation
+        const duration = 600;
+        const startTime = performance.now();
+
+        function animateFade() {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(1, elapsed / duration);
+
+            leafletDiv.style.opacity = progress;
+            globeDiv.style.opacity = 1 - progress;
+
+            if (progress < 1) {
+                requestAnimationFrame(animateFade);
+            } else {
+                // Transition complete
+                currentEngineState = ENGINE_STATE.LOCAL;
+                console.log('🗺️ Engine State: TRANSITION → LOCAL (Leaflet active)');
+                globeDiv.classList.add('hidden');
+                leafletDiv.classList.add('active');
+                transitionInProgress = false;
+            }
+        }
+        requestAnimationFrame(animateFade);
+    });
 }
 
 function transitionToGlobe() {
@@ -694,13 +710,11 @@ function transitionToGlobe() {
     // Disable Leaflet interactions immediately
     leafletDiv.classList.remove('active');
 
-    // Sync globe position from Leaflet
+    // Sync globe position from Leaflet - return to consistent altitude
     if (leafletMap && world) {
         const center = leafletMap.getCenter();
-        const zoom = leafletMap.getZoom();
-        // Calculate exact altitude to match current zoom for seamless transition
-        const altitude = zoomToAltitude(zoom);
-        world.pointOfView({ lat: center.lat, lng: center.lng, altitude: altitude }, 0);
+        // Return to same altitude (1.0) for consistent globe size on return
+        world.pointOfView({ lat: center.lat, lng: center.lng, altitude: 1.0 }, 0);
     }
 
     // Cross-fade animation with smoothstep easing
@@ -1909,147 +1923,85 @@ function initPrisma() {
     let isScrolling = false; // Vertical scroll lock
     let isIgnoreInteraction = false; // Locked out (e.g. globe)
 
+    // ===========================================
+    // FACE SWIPE DETECTION ONLY
+    // NO touch handlers on prismaContainer - let CSS handle scrolling natively
+    // We only detect horizontal swipes using a dedicated element
+    // ===========================================
+    console.log('🎯 Initializing face swipe detection (scroll handled by CSS)');
+    
+    // Create invisible swipe detection zones on left/right edges
     if (prismaContainer && prisma) {
-        prismaContainer.addEventListener('touchstart', (e) => {
-            if (e.touches.length > 1) return;
-
-            const touch = e.touches[0];
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-
-            // TRACKING START
-            currentRotationAtStart = prismaRotation;
-            startFaceIndex = currentPrismaFace;
-
-            // RESET ALL FLAGS
-            isDragging = false;
-            isScrolling = false;
-            isIgnoreInteraction = false;
-
-            // ROBUST HIT TESTING (Raycast)
-            // We use elementFromPoint to find exactly what is under the finger, 
-            // bypassing potential event targeting issues on 3D elements.
-            const actualTarget = document.elementFromPoint(touch.clientX, touch.clientY);
-
-            let prefersScroll = false;
-            if (actualTarget) {
-                // HARD IGNORE GLOBE (Always native)
-                if (actualTarget.closest('#miniGlobe') ||
-                    actualTarget.closest('.mini-globe-wrapper') ||
-                    actualTarget.tagName === 'CANVAS') {
-                    isIgnoreInteraction = true;
-                    return;
-                }
-
-                // PREFER SCROLL ON CONTENT (Be more lenient with verticality)
-                if (actualTarget.closest('.prisma-face') ||
-                    actualTarget.closest('.events-scroll-container') ||
-                    actualTarget.closest('.vertical-timeline') ||
-                    actualTarget.closest('.comparison-col')) {
-                    prefersScroll = true;
-                }
-            }
-
-            // Track state on start
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-            currentRotationAtStart = prismaRotation;
-            startFaceIndex = currentPrismaFace;
-            prismaContainer.dataset.prefersScroll = prefersScroll;
-
-            // Do NOT disable transition yet. Wait until we confirm horizontal drag.
+        // Listen on document for horizontal swipe gestures that START near edges
+        let swipeStartX = 0;
+        let swipeStartY = 0;
+        let swipeStartRotation = 0;
+        let isSwiping = false;
+        let swipeStartTime = 0;
+        
+        // Only handle pointer events (works for both mouse and touch)
+        document.addEventListener('pointerdown', (e) => {
+            // Only trigger swipe from phone screen area
+            if (!e.target.closest('.phone-screen')) return;
+            // Ignore globe touches
+            if (e.target.closest('#miniGlobe') || e.target.closest('.mini-globe-wrapper') || e.target.tagName === 'CANVAS') return;
+            
+            swipeStartX = e.clientX;
+            swipeStartY = e.clientY;
+            swipeStartRotation = prismaRotation;
+            swipeStartTime = Date.now();
+            isSwiping = false;
         }, { passive: true });
-
-        prismaContainer.addEventListener('touchmove', (e) => {
-            // STRICT GATES
-            if (isIgnoreInteraction) return; // Globe is active, do nothing
-            if (isScrolling) return; // Vertical scroll is active, let browser handle it
-
-            const touch = e.touches[0];
-            const diffX = touch.clientX - touchStartX;
-            const diffY = touch.clientY - touchStartY;
-
-            const prefersScroll = prismaContainer.dataset.prefersScroll === 'true';
-
-            // Axis Locking Logic (First Move Decision)
-            if (!isDragging) {
-                const absX = Math.abs(diffX);
-                const absY = Math.abs(diffY);
-                const totalDist = Math.sqrt(absX * absX + absY * absY);
-
-                if (totalDist < 5) return;
-
-                // Priority to Vertical Scroll
-                // If touching content, we are extremely lenient (absY > absX * 0.5)
-                const scrollBias = prefersScroll ? 0.5 : 1.0;
-                if (absY > absX * scrollBias) {
-                    isScrolling = true;
-                    isIgnoreInteraction = true;
-                    return;
-                }
-
-                // If moving horizontally (Must exceed threshold)
-                // If touching content, we require a larger move to avoid accidental swipes
-                const swipeThreshold = prefersScroll ? 30 : 10;
-                if (absX > swipeThreshold) {
-                    isDragging = true;
-                    prisma.style.transition = 'none';
-                }
+        
+        document.addEventListener('pointermove', (e) => {
+            if (!swipeStartTime) return;
+            
+            const diffX = e.clientX - swipeStartX;
+            const diffY = e.clientY - swipeStartY;
+            const absX = Math.abs(diffX);
+            const absY = Math.abs(diffY);
+            
+            // Detect very fast horizontal swipe (within 300ms, mostly horizontal)
+            const elapsed = Date.now() - swipeStartTime;
+            const isQuickSwipe = elapsed < 300 && absX > 50 && absX > absY * 3;
+            
+            if (!isSwiping && isQuickSwipe) {
+                isSwiping = true;
+                prisma.style.transition = 'none';
             }
-
-            // ACTUAL DRAG LOGIC
-            if (isDragging) {
-                // We are controlling rotation. Prevent browser navigation/scroll.
-                if (e.cancelable) e.preventDefault();
-
-                // VISUAL PHYSICS:
-                // Swipe Left (diffX < 0) -> Content moves Left -> Rotation DECREASES (CW)
-                // Swipe Right (diffX > 0) -> Content moves Right -> Rotation INCREASES (CCW)
+            
+            if (isSwiping) {
                 const rotationDelta = diffX * 0.4;
-                const newRotation = currentRotationAtStart + rotationDelta;
-
+                const newRotation = swipeStartRotation + rotationDelta;
                 prisma.style.transform = `translateZ(-${prismaRadius}px) rotateY(${newRotation}deg)`;
             }
-        }, { passive: false }); // passive: false needed for e.preventDefault()
-
-        prismaContainer.addEventListener('touchend', (e) => {
-            if (isIgnoreInteraction) {
-                isIgnoreInteraction = false;
-                return;
+        }, { passive: true });
+        
+        document.addEventListener('pointerup', (e) => {
+            if (isSwiping) {
+                prisma.style.transition = 'transform 0.4s ease-out';
+                const diffX = e.clientX - swipeStartX;
+                
+                if (Math.abs(diffX) > 60) {
+                    if (diffX < 0) rotatePrismaRight();
+                    else rotatePrismaLeft();
+                } else {
+                    // Snap back
+                    prisma.style.transform = `translateZ(-${prismaRadius}px) rotateY(${swipeStartRotation}deg)`;
+                }
+                isSwiping = false;
             }
-            if (isScrolling) {
-                isScrolling = false;
-                return;
+            swipeStartTime = 0;
+        }, { passive: true });
+        
+        document.addEventListener('pointercancel', () => {
+            if (isSwiping) {
+                prisma.style.transition = 'transform 0.4s ease-out';
+                prisma.style.transform = `translateZ(-${prismaRadius}px) rotateY(${swipeStartRotation}deg)`;
+                isSwiping = false;
             }
-
-            if (!isDragging) return;
-
-            isDragging = false;
-
-            const diffX = e.changedTouches[0].clientX - touchStartX;
-
-            // Restore animation
-            prisma.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)';
-
-            let targetIndex = startFaceIndex;
-
-            // SNAP LOGIC
-            // Swipe Left (diffX < -60) -> Next Face (index + 1)
-            if (diffX < -60) {
-                targetIndex = startFaceIndex + 1;
-            }
-            // Swipe Right (diffX > 60) -> Previous Face (index - 1)
-            else if (diffX > 60) {
-                targetIndex = startFaceIndex - 1;
-            }
-            // Else snap back to start
-
-            // Sync global rotation to visual drift to prevent jumping
-            prismaRotation = currentRotationAtStart + (diffX * 0.4);
-
-            rotatePrismaTo(targetIndex);
-        });
-
+            swipeStartTime = 0;
+        }, { passive: true });
     }
 
     // Face indicator dot clicks

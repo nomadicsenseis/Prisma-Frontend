@@ -80,22 +80,90 @@
             }
         });
 
+        // Track zoom for return-to-globe detection
+        let mapEntryZoom = null;
+        let lastZoomTime = 0;
+        
+        // Zoom-based transition: ONLY zoom OUT returns to globe
+        // Requires zooming out SIGNIFICANTLY from entry point
+        phoneLeafletMap.on('zoomend', function () {
+            // Only handle when in LOCAL state (map is active)
+            if (phoneEngineState !== 'LOCAL') {
+                mapEntryZoom = null;
+                return;
+            }
+            
+            const currentZoom = phoneLeafletMap.getZoom();
+            const now = Date.now();
+            
+            // Debounce: ignore rapid zoom changes (within 200ms)
+            if (now - lastZoomTime < 200) {
+                lastZoomTime = now;
+                return;
+            }
+            lastZoomTime = now;
+            
+            // Record entry zoom on first stable read
+            if (mapEntryZoom === null) {
+                mapEntryZoom = currentZoom;
+                console.log('📱 Phone: Map entry zoom = ' + mapEntryZoom);
+                return;
+            }
+            
+            // Only return to globe if zoomed out SIGNIFICANTLY from entry
+            // Must be at least 2 levels below entry AND below absolute threshold of 3
+            const zoomDelta = mapEntryZoom - currentZoom;
+            if (zoomDelta >= 2 && currentZoom <= 3) {
+                console.log('📱 Phone: Significant zoom out ' + mapEntryZoom + ' → ' + currentZoom + ' → Globe');
+                transitionToGlobe();
+            }
+        });
+
         // Touch-based double-tap for the map container
+        // Must be SINGLE finger taps (not pinch release)
         const mapContainer = phoneLeafletMap.getContainer();
+        let lastTapX = 0;
+        let lastTapY = 0;
+        let lastTouchCount = 0;
+        
+        mapContainer.addEventListener('touchstart', function(e) {
+            // Track how many fingers are touching
+            lastTouchCount = e.touches.length;
+        }, { passive: true });
+        
         mapContainer.addEventListener('touchend', function(e) {
             if (phoneEngineState !== 'LOCAL') return;
             
+            // IGNORE if this was a multi-touch gesture (pinch)
+            // e.touches.length is remaining fingers, we check if MORE than 0 remain
+            // OR if the gesture started with multiple fingers
+            if (e.touches.length > 0 || lastTouchCount > 1) {
+                lastTapTime = 0; // Reset double-tap detection
+                lastTouchCount = e.touches.length;
+                return;
+            }
+            
+            const touch = e.changedTouches[0];
             const currentTime = Date.now();
             const tapLength = currentTime - lastTapTime;
             
-            if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
+            // Check if taps are close together in position (within 50px)
+            const dx = Math.abs(touch.clientX - lastTapX);
+            const dy = Math.abs(touch.clientY - lastTapY);
+            const sameSpot = dx < 50 && dy < 50;
+            
+            if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0 && sameSpot) {
                 e.preventDefault();
                 console.log('📱 Phone: Touch double-tap on Map → Globe');
                 transitionToGlobe();
                 lastTapTime = 0;
             } else {
                 lastTapTime = currentTime;
+                lastTapX = touch.clientX;
+                lastTapY = touch.clientY;
             }
+            
+            lastTouchCount = 0;
         }, { passive: false });
 
         console.log('📱 Phone Engine: Leaflet Initialized');
@@ -105,9 +173,8 @@
     function syncCamera() {
         if (!phoneLeafletMap || !globeVizRef) return;
         const pov = globeVizRef.pointOfView();
-        const rawZoom = altitudeToZoom(pov.altitude);
-        const zoomLevel = Math.min(19, Math.max(2, rawZoom));
-        phoneLeafletMap.setView([pov.lat, pov.lng], zoomLevel, { animate: false });
+        // Use fixed zoom 5 for a good overview when entering map
+        phoneLeafletMap.setView([pov.lat, pov.lng], 5, { animate: false });
     }
 
     // Setup double-tap on Globe canvas (supports both mouse and touch)
@@ -199,12 +266,11 @@
         if (globeCanvas) globeCanvas.style.opacity = 0;
         leafletDiv.style.pointerEvents = 'none';
 
-        // Sync globe position from Leaflet
+        // Return to same altitude as initial globe (0.5) - keep map location
         if (phoneLeafletMap && globeVizRef) {
             const center = phoneLeafletMap.getCenter();
-            const zoom = phoneLeafletMap.getZoom();
-            const altitude = zoomToAltitude(zoom);
-            globeVizRef.pointOfView({ lat: center.lat, lng: center.lng, altitude: Math.max(altitude, 0.5) }, 0);
+            // Use 'alt' (not 'altitude') for consistency with initMiniGlobe
+            globeVizRef.pointOfView({ lat: center.lat, lng: center.lng, alt: 0.5 }, 0);
         }
 
         const duration = 800;

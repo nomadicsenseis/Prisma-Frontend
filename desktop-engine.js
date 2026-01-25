@@ -8,6 +8,7 @@
     let desktopEngineState = 'ORBITAL'; // 'ORBITAL', 'PRELOAD', 'TRANSITION', 'LOCAL'
     let desktopTransitionInProgress = false;
     let globeVizRef = null;
+    let lastMapZoom = null;  // Track zoom for detecting zoom-out
 
     // Constants (Higher thresholds for mini-globe - transition happens earlier)
     const PRELOAD_ALTITUDE = 3.5;
@@ -68,14 +69,26 @@
             maxZoom: 19
         }).addTo(desktopLeafletMap);
 
-        // Zoom-out return listener (zoom 7 matches ~0.6 altitude)
+        // Zoom-out return listener - ONLY triggers on zoom OUT, not zoom in
         desktopLeafletMap.on('zoomend', function () {
             if (desktopEngineState === 'LOCAL') {
                 const zoom = desktopLeafletMap.getZoom();
-                if (zoom <= 7) {
+                
+                // Only return to globe if:
+                // 1. User is zooming OUT (current zoom < last zoom)
+                // 2. AND zoom level is at or below threshold
+                if (lastMapZoom !== null && zoom < lastMapZoom && zoom <= 5) {
+                    console.log('🖥️ Desktop: Zoom OUT detected → returning to Globe');
                     transitionToGlobe();
                 }
+                
+                lastMapZoom = zoom;
             }
+        });
+        
+        // Reset zoom tracking when entering LOCAL state
+        desktopLeafletMap.on('load', function() {
+            lastMapZoom = desktopLeafletMap.getZoom();
         });
 
         // Double-tap: Map -> Globe (mouse)
@@ -147,9 +160,8 @@
     function syncCamera() {
         if (!desktopLeafletMap || !globeVizRef) return;
         const pov = globeVizRef.pointOfView();
-        const rawZoom = altitudeToZoom(pov.altitude);
-        const zoomLevel = Math.min(19, Math.max(2, rawZoom));
-        desktopLeafletMap.setView([pov.lat, pov.lng], zoomLevel, { animate: false });
+        // Use fixed zoom 5 for a good overview when entering map
+        desktopLeafletMap.setView([pov.lat, pov.lng], 5, { animate: false });
     }
 
     // Transition: Globe -> Leaflet
