@@ -68,11 +68,11 @@
             maxZoom: 19
         }).addTo(desktopLeafletMap);
 
-        // Zoom-out return listener
+        // Zoom-out return listener (zoom 7 matches ~0.6 altitude)
         desktopLeafletMap.on('zoomend', function () {
             if (desktopEngineState === 'LOCAL') {
                 const zoom = desktopLeafletMap.getZoom();
-                if (zoom <= 5.4) {
+                if (zoom <= 7) {
                     transitionToGlobe();
                 }
             }

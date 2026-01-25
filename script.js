@@ -21,8 +21,8 @@ let leafletMarkers = [];
 let transitionInProgress = false;
 
 // Altitude thresholds (relative to globe radius)
-const PRELOAD_ALTITUDE = 0.8;     // Start preloading Leaflet (lower = later trigger)
-const TRANSITION_ALTITUDE = 0.4;  // Begin cross-fade to Leaflet (lower = later trigger)
+const PRELOAD_ALTITUDE = 1.0;     // Start preloading Leaflet
+const TRANSITION_ALTITUDE = 0.6;  // Begin cross-fade to Leaflet (~zoom 7)
 let currentGlobeAltitude = 2.5;   // Initial starting altitude
 
 // Zoom conversion constants
@@ -529,12 +529,12 @@ function initLeafletMap() {
         transitionToGlobe();
     });
 
-    // Zoom-out: Return to Globe when zoom level gets low enough
+    // Zoom-out: Return to Globe when zoom level gets low enough (matches TRANSITION_ALTITUDE)
     leafletMap.on('zoomend', function () {
         if (currentEngineState === ENGINE_STATE.LOCAL) {
             const zoom = leafletMap.getZoom();
             console.log(`🗺️ Globe Mode: Zoom level = ${zoom}`);
-            if (zoom <= 4.5) {
+            if (zoom <= 7) {  // Matches ~0.6 altitude for consistent experience
                 console.log('🗺️ Globe Mode: Zoom out → returning to Globe');
                 transitionToGlobe();
             }
@@ -1816,6 +1816,11 @@ function initMiniGlobe() {
     // Increase sensitivity for "lighter" feel
     miniGlobeViz.controls().rotateSpeed = 3.5;
     miniGlobeViz.pointOfView({ lat: 40.4168, lng: -3.7038, alt: 0.5 });
+
+    // Initialize Phone Engine for double-tap transitions
+    if (window.PhoneEngine) {
+        window.PhoneEngine.init(miniGlobeViz, container);
+    }
 }
 
 // View Switching - Add Prisma
