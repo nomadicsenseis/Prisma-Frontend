@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from location_extractor import extract_location_from_text
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 app = Flask(__name__, static_folder='../', static_url_path='/')
 CORS(app)
@@ -174,7 +174,6 @@ def get_recent_hechos():
     WITH h, 
          collect(DISTINCT p.nombre) as newspapers, 
          max(COALESCE(f.fecha, a.fecha)) as latestDate
-    WHERE latestDate <= '2025-08-30'
     OPTIONAL MATCH (h)-[:PARTE_DE]->(m:EventoMacro)
     RETURN h.nombre as id, 
            COALESCE(h.fecha, latestDate) as date, 
@@ -335,4 +334,5 @@ def get_hecho_articles(hecho_id):
 
 if __name__ == '__main__':
     print(f"Connecting to Neo4j at {URI}")
+    print(f"Using database: {DATABASE}")
     app.run(host='0.0.0.0', port=5000, debug=True)
