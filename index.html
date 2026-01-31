@@ -19,7 +19,9 @@
     <script src="./vendor/globe.gl.min.js"></script>
     <script src="./vendor/lucide.min.js"></script>
 
-    <!-- Leaflet for Engine Switching (2D Map Mode) -->
+    <!-- Leaflet CSS && JS for 2D Map Engine -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -46,8 +48,12 @@
         </button>
     </div>
 
-    <!-- Globe Container -->
-    <div id="globeViz"></div>
+    <!-- Globe Container with Hybrid Engine -->
+    <div id="mainGlobeContainer">
+        <div id="mainLeafletMap"></div>
+        <div id="globeViz"></div>
+        <div class="engine-switch-hint" id="mainGlobeHint">🔍 Zoom in for map details</div>
+    </div>
 
     <!-- Leaflet Map Container (Engine Switching) -->
     <div id="leafletMap"></div>
@@ -209,6 +215,7 @@
                     <p id="desktopEventDate" class="face-subtitle"></p>
                 </div>
                 <div id="desktopMiniGlobeContainer" class="mini-globe-wrapper">
+                    <div id="desktopLeafletMap"></div>
                     <div id="desktopMiniGlobe"></div>
                 </div>
                 <div class="events-scroll-container" id="desktopEventsContainer">
