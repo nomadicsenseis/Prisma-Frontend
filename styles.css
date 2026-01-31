@@ -1476,18 +1476,19 @@ input[type="range"]::-webkit-slider-thumb {
     display: none !important;
 }
 
-/* Globe - prominent and visible */
+/* Globe - prominent but more compact */
 .phone-screen .mini-globe-wrapper {
     position: relative !important;
     flex-shrink: 0;
     width: 100% !important;
-    height: 200px !important;
+    height: 160px !important;
+    /* Reduced from 200px for more text space */
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin: 8px 0 8px 0 !important;
-    /* Reduced margins to bring sections closer */
+    margin: 4px 0 4px 0 !important;
+    /* Minimize margins */
     z-index: 5;
     max-width: none !important;
     box-sizing: border-box;
@@ -1535,41 +1536,11 @@ input[type="range"]::-webkit-slider-thumb {
     z-index: 20;
 }
 
-/* Explicit styling for other faces in Phone Mode to avoid blank screens */
-.phone-screen .face-comparison,
-.phone-screen .face-timeline {
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100% !important;
-    width: 100% !important;
-    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-color) 100%) !important;
-    overflow: hidden !important;
-    padding: 0 !important;
-    /* Removed 2D slide overrides to allow 3D */
-}
-
 /* Hide navigation arrows on mobile */
 .phone-screen .prisma-nav,
 .phone-screen #prismaNavLeft,
 .phone-screen #prismaNavRight {
     display: none !important;
-}
-
-.phone-screen .comparison-columns,
-.phone-screen .vertical-timeline {
-    flex: 1 !important;
-    height: auto !important;
-    overflow: hidden !important;
-    background: transparent !important;
-    position: relative !important;
-}
-
-.phone-screen .comparison-col,
-.phone-screen .vertical-timeline {
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
-    z-index: 20;
 }
 
 /* Event cards */
@@ -1637,6 +1608,10 @@ input[type="range"]::-webkit-slider-thumb {
     max-width: none !important;
     padding-right: 0 !important;
     margin-right: 0 !important;
+    font-size: 1.25rem !important;
+    /* INCREASED SIZE */
+    line-height: 1.3 !important;
+    margin-bottom: 8px !important;
 }
 
 .phone-screen .event-card p {
@@ -1644,13 +1619,17 @@ input[type="range"]::-webkit-slider-thumb {
     max-width: none !important;
     padding-right: 0 !important;
     margin-right: 0 !important;
+    font-size: 0.95rem !important;
+    /* INCREASED SIZE */
+    line-height: 1.5 !important;
+    opacity: 0.9;
 }
 
 /* Show date in compact format */
 .phone-screen .event-date {
     display: block !important;
-    font-size: 0.65rem !important;
-    margin-top: 6px !important;
+    font-size: 0.75rem !important;
+    margin-top: 8px !important;
     color: var(--text-secondary);
 }
 
