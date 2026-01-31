@@ -1577,11 +1577,16 @@ input[type="range"]::-webkit-slider-thumb {
 
 .phone-screen .event-card {
     /* STRICT DIMENSIONS relative to container */
-    padding: 8px 0 !important;
+    padding: 8px 0 16px 0 !important;
+    /* Added bottom padding for safety */
     width: 100% !important;
     height: 100% !important;
     /* Force height to match container */
     min-height: 100% !important;
+    max-height: 100% !important;
+    /* CRITICAL: Prevent growth beyond viewport */
+    overflow: hidden !important;
+    /* FAILSAFE: Cut off anything that overflows */
 
     /* STRICT SNAP STOP */
     scroll-snap-align: start;
@@ -1636,9 +1641,9 @@ input[type="range"]::-webkit-slider-thumb {
 
     /* Truncate Description safely */
     display: -webkit-box;
-    -webkit-line-clamp: 6;
-    /* Reduced to leave room for full title */
-    line-clamp: 6;
+    -webkit-line-clamp: 5;
+    /* Safer limit to guarantee date fits */
+    line-clamp: 5;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1649,9 +1654,8 @@ input[type="range"]::-webkit-slider-thumb {
     display: block !important;
     font-size: 0.75rem !important;
     margin-top: auto;
-    /* Push to bottom if extra space */
+    /* Push to bottom */
     padding-top: 8px;
-    /* Ensure separation */
     color: var(--text-secondary);
     flex-shrink: 0;
     /* Never hide date */
