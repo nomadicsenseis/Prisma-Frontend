@@ -46,7 +46,7 @@
         mapDiv.style.display = 'none';
         mapDiv.style.pointerEvents = 'none';
         mapDiv.style.transition = 'opacity 0.8s ease';
-        mapDiv.style.background = '#0a0a1a';
+        mapDiv.style.background = getComputedStyle(document.documentElement).getPropertyValue('--bg-tertiary').trim() || '#0a0a1a';
         mapDiv.style.borderRadius = '12px';
 
         container.style.position = 'relative';
@@ -73,7 +73,7 @@
         desktopLeafletMap.on('zoomend', function () {
             if (desktopEngineState === 'LOCAL') {
                 const zoom = desktopLeafletMap.getZoom();
-                
+
                 // Only return to globe if:
                 // 1. User is zooming OUT (current zoom < last zoom)
                 // 2. AND zoom level is at or below threshold
@@ -81,13 +81,13 @@
                     console.log('🖥️ Desktop: Zoom OUT detected → returning to Globe');
                     transitionToGlobe();
                 }
-                
+
                 lastMapZoom = zoom;
             }
         });
-        
+
         // Reset zoom tracking when entering LOCAL state
-        desktopLeafletMap.on('load', function() {
+        desktopLeafletMap.on('load', function () {
             lastMapZoom = desktopLeafletMap.getZoom();
         });
 
@@ -102,12 +102,12 @@
         // Touch double-tap for the map container
         let mapLastTap = 0;
         const mapContainer = desktopLeafletMap.getContainer();
-        mapContainer.addEventListener('touchend', function(e) {
+        mapContainer.addEventListener('touchend', function (e) {
             if (desktopEngineState !== 'LOCAL') return;
-            
+
             const currentTime = Date.now();
             const tapLength = currentTime - mapLastTap;
-            
+
             if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
                 e.preventDefault();
                 console.log('🖥️ Desktop: Touch double-tap on Map → Globe');
@@ -140,10 +140,10 @@
             let lastTap = 0;
             canvas.addEventListener('touchend', (e) => {
                 if (desktopEngineState !== 'ORBITAL' && desktopEngineState !== 'PRELOAD') return;
-                
+
                 const currentTime = Date.now();
                 const tapLength = currentTime - lastTap;
-                
+
                 if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
                     e.preventDefault();
                     console.log('🖥️ Desktop: Touch double-tap on Globe → Map');
@@ -177,12 +177,12 @@
         // IMPORTANT: Make visible FIRST, then sync, then animate
         leafletDiv.style.display = 'block';
         leafletDiv.style.opacity = '0';
-        
+
         // Wait a frame for display to take effect, then sync and start animation
         requestAnimationFrame(() => {
             if (desktopLeafletMap) desktopLeafletMap.invalidateSize();
             syncCamera();
-            
+
             // Now start the animation after sync is complete
             const duration = 1200;
             const startTime = performance.now();

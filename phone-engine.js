@@ -48,7 +48,7 @@
         mapDiv.style.display = 'none';
         mapDiv.style.pointerEvents = 'none';
         mapDiv.style.transition = 'opacity 0.8s ease';
-        mapDiv.style.background = '#0a0a1a';
+        mapDiv.style.background = getComputedStyle(document.documentElement).getPropertyValue('--bg-tertiary').trim() || '#0a0a1a';
         mapDiv.style.borderRadius = '8px';
 
         container.style.position = 'relative';
@@ -83,7 +83,7 @@
         // Track zoom for return-to-globe detection
         let mapEntryZoom = null;
         let lastZoomTime = 0;
-        
+
         // Zoom-based transition: ONLY zoom OUT returns to globe
         // Requires zooming out SIGNIFICANTLY from entry point
         phoneLeafletMap.on('zoomend', function () {
@@ -92,24 +92,24 @@
                 mapEntryZoom = null;
                 return;
             }
-            
+
             const currentZoom = phoneLeafletMap.getZoom();
             const now = Date.now();
-            
+
             // Debounce: ignore rapid zoom changes (within 200ms)
             if (now - lastZoomTime < 200) {
                 lastZoomTime = now;
                 return;
             }
             lastZoomTime = now;
-            
+
             // Record entry zoom on first stable read
             if (mapEntryZoom === null) {
                 mapEntryZoom = currentZoom;
                 console.log('📱 Phone: Map entry zoom = ' + mapEntryZoom);
                 return;
             }
-            
+
             // Only return to globe if zoomed out SIGNIFICANTLY from entry
             // Must be at least 2 levels below entry AND below absolute threshold of 3
             const zoomDelta = mapEntryZoom - currentZoom;
@@ -125,15 +125,15 @@
         let lastTapX = 0;
         let lastTapY = 0;
         let lastTouchCount = 0;
-        
-        mapContainer.addEventListener('touchstart', function(e) {
+
+        mapContainer.addEventListener('touchstart', function (e) {
             // Track how many fingers are touching
             lastTouchCount = e.touches.length;
         }, { passive: true });
-        
-        mapContainer.addEventListener('touchend', function(e) {
+
+        mapContainer.addEventListener('touchend', function (e) {
             if (phoneEngineState !== 'LOCAL') return;
-            
+
             // IGNORE if this was a multi-touch gesture (pinch)
             // e.touches.length is remaining fingers, we check if MORE than 0 remain
             // OR if the gesture started with multiple fingers
@@ -142,16 +142,16 @@
                 lastTouchCount = e.touches.length;
                 return;
             }
-            
+
             const touch = e.changedTouches[0];
             const currentTime = Date.now();
             const tapLength = currentTime - lastTapTime;
-            
+
             // Check if taps are close together in position (within 50px)
             const dx = Math.abs(touch.clientX - lastTapX);
             const dy = Math.abs(touch.clientY - lastTapY);
             const sameSpot = dx < 50 && dy < 50;
-            
+
             if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0 && sameSpot) {
                 e.preventDefault();
                 console.log('📱 Phone: Touch double-tap on Map → Globe');
@@ -162,7 +162,7 @@
                 lastTapX = touch.clientX;
                 lastTapY = touch.clientY;
             }
-            
+
             lastTouchCount = 0;
         }, { passive: false });
 
@@ -193,10 +193,10 @@
             let globeLastTap = 0;
             canvas.addEventListener('touchend', (e) => {
                 if (phoneEngineState !== 'ORBITAL') return;
-                
+
                 const currentTime = Date.now();
                 const tapLength = currentTime - globeLastTap;
-                
+
                 if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
                     e.preventDefault();
                     console.log('📱 Phone: Touch double-tap on Globe → Map');

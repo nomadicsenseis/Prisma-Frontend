@@ -341,7 +341,7 @@ function initializeGlobe() {
         console.log('🌍 Globe already initialized, skipping');
         return;
     }
-    
+
     if (!window.THREE || typeof Globe === 'undefined') {
         console.error('Missing dependencies');
         return;
@@ -531,19 +531,19 @@ function initLeafletMap() {
 
     // Track last zoom level for detecting zoom OUT only
     let lastGlobeMapZoom = null;
-    
+
     // Zoom-out: Return to Globe ONLY when zooming OUT past threshold
     leafletMap.on('zoomend', function () {
         if (currentEngineState === ENGINE_STATE.LOCAL) {
             const zoom = leafletMap.getZoom();
             console.log(`🗺️ Globe Mode: Zoom level = ${zoom}, last = ${lastGlobeMapZoom}`);
-            
+
             // Only return if user is zooming OUT AND below threshold
             if (lastGlobeMapZoom !== null && zoom < lastGlobeMapZoom && zoom <= 5) {
                 console.log('🗺️ Globe Mode: Zoom OUT detected → returning to Globe');
                 transitionToGlobe();
             }
-            
+
             lastGlobeMapZoom = zoom;
         }
     });
@@ -576,7 +576,7 @@ function syncLeafletMarkers() {
     // Clear existing markers
     leafletMarkers.forEach(m => m.remove());
     leafletMarkers = [];
-    
+
     // Add news markers to Leaflet
     const grouped = groupNewsByLocation(newsData);
     grouped.forEach(d => {
@@ -660,7 +660,7 @@ function transitionToLeaflet() {
         if (leafletMap) {
             leafletMap.invalidateSize();
         }
-        
+
         // Sync camera - use zoom 5 for better overview
         if (leafletMap && world) {
             const pov = world.pointOfView();
@@ -1929,7 +1929,7 @@ function initPrisma() {
     // We only detect horizontal swipes using a dedicated element
     // ===========================================
     console.log('🎯 Initializing face swipe detection (scroll handled by CSS)');
-    
+
     // Create invisible swipe detection zones on left/right edges
     if (prismaContainer && prisma) {
         // Listen on document for horizontal swipe gestures that START near edges
@@ -1938,50 +1938,50 @@ function initPrisma() {
         let swipeStartRotation = 0;
         let isSwiping = false;
         let swipeStartTime = 0;
-        
+
         // Only handle pointer events (works for both mouse and touch)
         document.addEventListener('pointerdown', (e) => {
             // Only trigger swipe from phone screen area
             if (!e.target.closest('.phone-screen')) return;
             // Ignore globe touches
             if (e.target.closest('#miniGlobe') || e.target.closest('.mini-globe-wrapper') || e.target.tagName === 'CANVAS') return;
-            
+
             swipeStartX = e.clientX;
             swipeStartY = e.clientY;
             swipeStartRotation = prismaRotation;
             swipeStartTime = Date.now();
             isSwiping = false;
         }, { passive: true });
-        
+
         document.addEventListener('pointermove', (e) => {
             if (!swipeStartTime) return;
-            
+
             const diffX = e.clientX - swipeStartX;
             const diffY = e.clientY - swipeStartY;
             const absX = Math.abs(diffX);
             const absY = Math.abs(diffY);
-            
+
             // Detect very fast horizontal swipe (within 300ms, mostly horizontal)
             const elapsed = Date.now() - swipeStartTime;
             const isQuickSwipe = elapsed < 300 && absX > 50 && absX > absY * 3;
-            
+
             if (!isSwiping && isQuickSwipe) {
                 isSwiping = true;
                 prisma.style.transition = 'none';
             }
-            
+
             if (isSwiping) {
                 const rotationDelta = diffX * 0.4;
                 const newRotation = swipeStartRotation + rotationDelta;
                 prisma.style.transform = `translateZ(-${prismaRadius}px) rotateY(${newRotation}deg)`;
             }
         }, { passive: true });
-        
+
         document.addEventListener('pointerup', (e) => {
             if (isSwiping) {
                 prisma.style.transition = 'transform 0.4s ease-out';
                 const diffX = e.clientX - swipeStartX;
-                
+
                 if (Math.abs(diffX) > 60) {
                     if (diffX < 0) rotatePrismaRight();
                     else rotatePrismaLeft();
@@ -1993,7 +1993,7 @@ function initPrisma() {
             }
             swipeStartTime = 0;
         }, { passive: true });
-        
+
         document.addEventListener('pointercancel', () => {
             if (isSwiping) {
                 prisma.style.transition = 'transform 0.4s ease-out';
@@ -2887,7 +2887,7 @@ function initDesktopMiniGlobe() {
             updateDesktopMiniGlobePosition(currentHechoIndex);
         }
     }, 2000); // 2 second delay to show globe first
-    
+
     console.log('🖥️ Desktop Mini Globe initialized with Engine Switching');
 }
 
@@ -2952,3 +2952,74 @@ window.addEventListener('resize', () => {
 });
 
 
+// =========================================
+// THEME MANAGEMENT (Light/Dark Mode)
+// =========================================
+
+/**
+ * Initialize theme from localStorage or default to 'dark'
+ */
+function initTheme() {
+    const savedTheme = localStorage.getItem('prisma-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcons(savedTheme);
+    console.log('🎨 Theme initialized:', savedTheme);
+}
+
+/**
+ * Toggle between light and dark themes
+ */
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('prisma-theme', newTheme);
+    updateThemeIcons(newTheme);
+
+    console.log('🎨 Theme changed to:', newTheme);
+}
+
+/**
+ * Update the theme toggle button icons based on current theme
+ */
+function updateThemeIcons(theme) {
+    const lightIcon = document.querySelector('.theme-icon-light');
+    const darkIcon = document.querySelector('.theme-icon-dark');
+
+    if (lightIcon && darkIcon) {
+        if (theme === 'light') {
+            // In light mode: show moon icon (to switch to dark)
+            lightIcon.style.display = 'none';
+            darkIcon.style.display = 'block';
+        } else {
+            // In dark mode: show sun icon (to switch to light)
+            lightIcon.style.display = 'block';
+            darkIcon.style.display = 'none';
+        }
+    }
+
+    // Re-create Lucide icons after visibility change
+    if (window.lucide) {
+        setTimeout(() => lucide.createIcons(), 10);
+    }
+}
+
+// Initialize theme on page load
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+
+    // Attach theme toggle listener
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent other handlers
+            toggleTheme();
+        });
+    }
+});
+
+// Also run on immediate script load in case DOMContentLoaded already fired
+if (document.readyState !== 'loading') {
+    initTheme();
+}
