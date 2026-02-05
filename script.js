@@ -3199,32 +3199,17 @@ function initDesktopMiniGlobe() {
         }
     }, 2000);
 
-    console.log('🖥️ Desktop Mini Globe initialized with Engine Switching');
+    console.log('🖥️ Desktop Mini Globe initialized');
 
     // =========================================
-    // HYBRID ENGINE: Double-Tap to Switch
+    // HYBRID ENGINE: Use DesktopEngine module
     // =========================================
     const globeContainer = document.getElementById('desktopMiniGlobeContainer');
-    if (globeContainer) {
-        // Double-tap on globe container to switch to Map (alternative method)
-        globeContainer.addEventListener('dblclick', (e) => {
-            // Only switch if we are in ORBITAL state (Globe active)
-            if (currentEngineState === ENGINE_STATE.ORBITAL) {
-                console.log('👆👆 Globe Double Tap: Switching to Map');
-                transitionToLeaflet();
-                e.stopPropagation();
-            }
-        });
-
-        // Add visual hint for engine switching
-        const hint = document.createElement('div');
-        hint.className = 'engine-switch-hint';
-        hint.textContent = '🔍 Zoom in for map details';
-        globeContainer.appendChild(hint);
+    if (globeContainer && window.DesktopEngine) {
+        // Initialize the DesktopEngine with the globe instance and container
+        window.DesktopEngine.init(desktopMiniGlobeViz, globeContainer);
+        console.log('✅ DesktopEngine initialized for hybrid Globe ⇄ Leaflet transitions');
     }
-
-    // Initialize Leaflet map for hybrid engine (pre-load)
-    initDesktopLeafletMap();
 }
 
 function updateDesktopMiniGlobePosition(index) {
