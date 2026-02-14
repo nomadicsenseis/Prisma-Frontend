@@ -784,34 +784,178 @@ const chatMessages = document.getElementById('chatMessages');
 function toggleChat() {
     chatbotWindow.classList.toggle('open');
 }
-chatbotToggle.addEventListener('click', toggleChat);
-chatbotClose.addEventListener('click', toggleChat);
+if (chatbotToggle) chatbotToggle.addEventListener('click', toggleChat);
+if (chatbotClose) chatbotClose.addEventListener('click', toggleChat);
 
 function addMessage(text, sender) {
     const div = document.createElement('div');
     div.classList.add('message', sender);
-    div.innerHTML = `<p>${text}</p>`;
+    // Handle newlines for bot responses
+    if (sender === 'bot') {
+        const formatted = (text || '').replace(/\n/g, '<br>');
+        div.innerHTML = `<p>${formatted}</p>`;
+    } else {
+        div.innerHTML = `<p>${text}</p>`;
+    }
     chatMessages.appendChild(div);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function handleSend() {
+let currentConversationId = null;
+
+async function handleSend() {
     const txt = chatInput.value.trim();
     if (!txt) return;
+
     addMessage(txt, 'user');
     chatInput.value = '';
-    setTimeout(() => {
-        const responses = [
-            'Entiendo. ¿Te gustaría saber más sobre esa noticia?',
-            'Puedo buscar más información en los periódicos españoles.',
-            'Ese es un tema interesante. Aquí tienes un resumen...',
-            'Lo siento, solo soy una interfaz de demostración por ahora.'
-        ];
-        addMessage(responses[Math.floor(Math.random() * responses.length)], 'bot');
-    }, 1000);
+
+    // Add loading indicator
+    const loadingId = 'loading-' + Date.now();
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = loadingId;
+    loadingDiv.classList.add('message', 'bot');
+    loadingDiv.innerHTML = '<p>...</p>';
+    chatMessages.appendChild(loadingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    try {
+        const res = await fetch('/api/chat-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: txt,
+                conversation_id: currentConversationId
+            })
+        });
+
+        // Remove loading
+        const loader = document.getElementById(loadingId);
+        if (loader) loader.remove();
+
+        if (!res.ok) {
+            throw new Error(`Server status: ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.error) {
+            addMessage(`Error: ${data.error}`, 'bot');
+        } else {
+            // Save conversation ID for context
+            if (data.conversation_id) {
+                currentConversationId = data.conversation_id;
+            }
+            addMessage(data.response, 'bot');
+        }
+    } catch (e) {
+        // Remove loading
+        const loader = document.getElementById(loadingId);
+        if (loader) loader.remove();
+
+        console.error('Chat Error:', e);
+        addMessage('Lo siento, el servicio de asistente no está disponible en este momento.', 'bot');
+    }
 }
-chatSend.addEventListener('click', handleSend);
-chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSend(); });
+if (chatSend) chatSend.addEventListener('click', handleSend);
+if (chatInput) chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSend(); });
+
+// Make Chatbot Draggable
+const chatHeader = document.querySelector('.chat-header');
+let isDragging = false;
+let currentX;
+let currentY;
+let initialX;
+let initialY;
+let xOffset = 0;
+let yOffset = 0;
+
+if (chatHeader && chatbotWindow) {
+    chatHeader.addEventListener('mousedown', dragStart);
+    document.addEventListener('mouseup', dragEnd);
+    document.addEventListener('mousemove', drag);
+
+    function dragStart(e) {
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+
+        if (e.target === chatHeader || e.target.parentNode === chatHeader) {
+            isDragging = true;
+        }
+    }
+
+    function dragEnd(e) {
+        initialX = currentX;
+        initialY = currentY;
+        isDragging = false;
+    }
+
+    function drag(e) {
+        if (isDragging) {
+            e.preventDefault();
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+
+            xOffset = currentX;
+            yOffset = currentY;
+
+            setTranslate(currentX, currentY, chatbotWindow);
+        }
+    }
+
+    function setTranslate(xPos, yPos, el) {
+        // Use translate3d for better performance
+        // el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+        // NOTE: blending with scale(1) from .open class might be tricky if we use transform here.
+        // Better to use top/left or right/bottom for a fixed element.
+
+        // Let's use computed style to get current position if we weren't using offset.
+        // Actually, since it's fixed, we can just update top/left.
+        // But our CSS uses bottom/right.
+
+        // Simpler approach for Fixed positioning:
+        // Adjust right/bottom styles directly? NO, simpler to use transform if we can preserve scale.
+        // OR simply change top/left directly and unset bottom/right on first drag.
+    }
+}
+
+// Reimplements simpler drag for fixed element
+(function () {
+    const header = document.querySelector('.chat-header');
+    const win = document.getElementById('chatbotWindow');
+
+    if (!header || !win) return;
+
+    let isDown = false;
+    let offset = [0, 0];
+
+    header.addEventListener('mousedown', function (e) {
+        isDown = true;
+        offset = [
+            win.offsetLeft - e.clientX,
+            win.offsetTop - e.clientY
+        ];
+        // Ensure we switch to left/top positioning instead of right/bottom
+        const rect = win.getBoundingClientRect();
+        win.style.right = 'auto';
+        win.style.bottom = 'auto';
+        win.style.left = rect.left + 'px';
+        win.style.top = rect.top + 'px';
+        win.style.margin = '0';
+    }, true);
+
+    document.addEventListener('mouseup', function () {
+        isDown = false;
+    }, true);
+
+    document.addEventListener('mousemove', function (e) {
+        e.preventDefault();
+        if (isDown) {
+            win.style.left = (e.clientX + offset[0]) + 'px';
+            win.style.top = (e.clientY + offset[1]) + 'px';
+        }
+    }, true);
+})();
 
 // View Switching Logic
 const viewGlobeBtn = document.getElementById('viewGlobe');

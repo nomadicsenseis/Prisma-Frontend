@@ -1,4 +1,5 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+import requests
 from neo4j import GraphDatabase
 from flask_cors import CORS
 import os
@@ -331,6 +332,22 @@ def get_hecho_articles(hecho_id):
     except Exception as e:
         print(f"Error getting hecho articles: {e}")
         return jsonify([])
+
+@app.route('/api/chat-proxy', methods=['POST'])
+def chat_proxy():
+    """Proxy requests to the external agent service to avoid CORS issues"""
+    try:
+        data = request.json
+        agent_url = "http://localhost:8001/api/chat"
+        # Forward the request to the agent
+        resp = requests.post(agent_url, json=data)
+        # Return the agent's response
+        return jsonify(resp.json()), resp.status_code
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": "Agent service unreachable"}), 503
+    except Exception as e:
+        print(f"Error in chat proxy: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print(f"Connecting to Neo4j at {URI}")

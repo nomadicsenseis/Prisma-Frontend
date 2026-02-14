@@ -537,16 +537,16 @@ body {
 }
 
 /* Chatbot */
+/* Main container for the Toggle Button (keeps it bottom-right) */
 .chatbot-container {
     position: absolute;
     bottom: 20px;
     right: 20px;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    z-index: 2000;
+    /* Removed flex/align-items to decouple the window */
 }
 
+/* Toggle button stays in container */
 .chatbot-toggle {
     width: 60px;
     height: 60px;
@@ -567,7 +567,14 @@ body {
     background: var(--accent-hover);
 }
 
+/* Chatbot Window - Independent Floating Element */
 .chatbot-window {
+    position: fixed;
+    /* Fixed to viewport for dragging */
+    bottom: 90px;
+    /* Initial position near toggle */
+    right: 20px;
+    /* Initial position near toggle */
     width: 350px;
     height: 500px;
     background: var(--panel-bg);
@@ -575,29 +582,33 @@ body {
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--panel-border);
     border-radius: 16px;
-    margin-bottom: 15px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transform-origin: bottom right;
-    transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.3s ease;
+    z-index: 2001;
+    /* Higher than toggle */
+    transition: opacity 0.3s ease, transform 0.3s ease;
 
     /* Hidden state */
     opacity: 0;
-    transform: scale(0.9) translateY(20px);
     pointer-events: none;
+    transform: scale(0.9);
 }
 
 .chatbot-window.open {
     opacity: 1;
-    transform: scale(1) translateY(0);
     pointer-events: auto;
+    transform: scale(1);
 }
 
 .chat-header {
     padding: 15px;
     background: var(--accent-subtle);
     border-bottom: 1px solid var(--panel-border);
+    cursor: move;
+    /* Indicates draggable */
+    user-select: none;
+    /* Prevent text selection while dragging */
     display: flex;
     justify-content: space-between;
     align-items: center;
