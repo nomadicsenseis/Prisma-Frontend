@@ -658,6 +658,45 @@ body {
     gap: 10px;
 }
 
+/* Chat Markdown Styles */
+.chat-list-item {
+    padding-left: 15px;
+    position: relative;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.chat-list-item::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--accent-color);
+    font-weight: bold;
+}
+
+.chat-messages strong {
+    color: var(--accent-color);
+    font-weight: 700;
+}
+
+.chat-messages em {
+    font-style: italic;
+    color: var(--text-primary);
+    opacity: 0.9;
+}
+
+.chat-messages h1,
+.chat-messages h2,
+.chat-messages h3 {
+    margin-top: 10px;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+    color: var(--text-primary);
+    font-weight: 700;
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 2px;
+}
+
 .chat-input-area input {
     flex: 1;
     background: var(--overlay-dark);

@@ -787,13 +787,45 @@ function toggleChat() {
 if (chatbotToggle) chatbotToggle.addEventListener('click', toggleChat);
 if (chatbotClose) chatbotClose.addEventListener('click', toggleChat);
 
+function parseMarkdown(text) {
+    if (!text) return '';
+    let html = text;
+
+    // Headers (### Header)
+    html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+    html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+    // Bold (**text**)
+    html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+
+    // Italic (*text*)
+    html = html.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+
+    // Unordered Lists (- item)
+    // Use div with custom class for safe rendering without strict UL wrapping
+    html = html.replace(/^- (.*$)/gim, '<div class="chat-list-item">$1</div>');
+
+    // Links [text](url)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>');
+
+    // Newlines to <br> (but carefully, avoiding double breaks after headers/divs)
+    html = html.replace(/\n/g, '<br>');
+
+    // Clean up <br> after block elements to prevent huge gaps
+    html = html.replace(/<\/h[1-3]><br>/gim, '</h$1>');
+    html = html.replace(/<\/div><br>/gim, '</div>');
+
+    return html;
+}
+
 function addMessage(text, sender) {
     const div = document.createElement('div');
     div.classList.add('message', sender);
-    // Handle newlines for bot responses
+
     if (sender === 'bot') {
-        const formatted = (text || '').replace(/\n/g, '<br>');
-        div.innerHTML = `<p>${formatted}</p>`;
+        const formatted = parseMarkdown(text);
+        div.innerHTML = formatted; // Removed <p> wrapper to allow block elements like <h3>
     } else {
         div.innerHTML = `<p>${text}</p>`;
     }
