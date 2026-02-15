@@ -774,19 +774,11 @@ function transitionToGlobe() {
 }
 
 // Chatbot UI
-const chatbotClose = document.getElementById('chatbotClose');
-const chatbotToggle = document.getElementById('chatbotToggle');
-const chatbotWindow = document.getElementById('chatbotWindow');
-const chatInput = document.getElementById('chatInput');
-const chatSend = document.getElementById('chatSend');
-const chatMessages = document.getElementById('chatMessages');
+// Chatbot UI - Globals removed, now handled dynamically per window
+const chatbotToggle = document.getElementById('chatbotToggle'); // Kept for main toggle logic below
+// Other IDs (chatbotWindow, chatInput...) are now dynamic.
 
-function toggleChat() {
-    chatbotWindow.classList.toggle('open');
-}
-if (chatbotToggle) chatbotToggle.addEventListener('click', toggleChat);
-if (chatbotClose) chatbotClose.addEventListener('click', toggleChat);
-
+// Text Parsers
 function parseMarkdown(text) {
     if (!text) return '';
     let html = text;
@@ -821,18 +813,27 @@ function parseMarkdown(text) {
 
 // --- Chatbot & Bubbles Logic ---
 let conversations = {};
-let activeConversationId = 'init';
+let activeConversationId = null; // No longer just one active, but "focused"
+let zIndexCounter = 3000; // Start z-index for windows
+
+// Container for windows
+const chatWindowsContainer = document.getElementById('chatWindowsContainer');
+const bubblesDock = document.getElementById('bubblesDock');
 
 // Initialize default conversation
-conversations['init'] = {
+const initId = 'conv-init';
+conversations[initId] = {
+    id: initId,
     messages: [{ text: 'Hola. Soy AletheIA, tu asistente de inteligencia de fuentes abiertas. ¿En qué puedo ayudarte?', sender: 'bot' }],
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    isOpen: false, // Start closed
+    isMinimized: false,
+    x: 100,
+    y: 100,
+    zIndex: zIndexCounter++
 };
 
-const bubblesDock = document.getElementById('bubblesDock');
-// newChatBtn - removed from HTML, we will create it dynamically in dock or look for it?
-// Actually, let's just create it in the render loop.
-
+// Render Bubbles (Dock)
 function renderBubbles() {
     if (!bubblesDock) return;
     bubblesDock.innerHTML = '';
@@ -841,9 +842,10 @@ function renderBubbles() {
     const sortedIds = Object.keys(conversations).sort((a, b) => conversations[a].timestamp - conversations[b].timestamp);
 
     sortedIds.forEach(id => {
+        const conv = conversations[id];
         const bubble = document.createElement('div');
         bubble.classList.add('conversation-bubble');
-        if (id === activeConversationId && chatbotWindow.classList.contains('open')) {
+        if (conv.isOpen && !conv.isMinimized) {
             bubble.classList.add('active');
         }
 
@@ -853,13 +855,13 @@ function renderBubbles() {
         // Interactions
         bubble.onclick = (e) => {
             e.stopPropagation();
-            openConversation(id);
+            toggleConversationWindow(id);
         };
 
         bubblesDock.appendChild(bubble);
     });
 
-    // 2. Render "New Chat" Bubble (Always at top if column-reverse, so append last)
+    // 2. Render "New Chat" Bubble
     const newBubble = document.createElement('div');
     newBubble.classList.add('new-chat-bubble');
     newBubble.title = "Nueva Conversación";
@@ -870,289 +872,305 @@ function renderBubbles() {
     };
     bubblesDock.appendChild(newBubble);
 
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
+}
+
+// Toggle Window Visibility
+function toggleConversationWindow(id) {
+    const conv = conversations[id];
+    if (!conv) return;
+
+    if (conv.isOpen) {
+        if (conv.isMinimized) {
+            // Restore
+            conv.isMinimized = false;
+            // Bring to front
+            bringToFront(id);
+            // Ensure window exists in DOM
+            let win = document.getElementById(`chat-window-${id}`);
+            if (!win) renderChatWindow(id);
+            else {
+                win.classList.remove('minimized');
+                win.style.display = 'flex';
+                // Update z-index
+                win.style.zIndex = conv.zIndex;
+            }
+        } else {
+            // Minimize (hide window, keep bubble)
+            conv.isMinimized = true;
+            const win = document.getElementById(`chat-window-${id}`);
+            if (win) win.style.display = 'none';
+        }
+    } else {
+        // Open
+        conv.isOpen = true;
+        conv.isMinimized = false;
+        renderChatWindow(id);
+        bringToFront(id);
+    }
+    renderBubbles();
 }
 
 function openConversation(id) {
-    activeConversationId = id;
-
-    // Open window if closed
-    if (!chatbotWindow.classList.contains('open')) {
-        chatbotWindow.classList.add('open');
-        chatbotWindow.classList.remove('minimized'); // Ensure not minimized
+    // Alias for explicit open
+    const conv = conversations[id];
+    if (!conv) return;
+    if (!conv.isOpen || conv.isMinimized) {
+        toggleConversationWindow(id);
     } else {
-        // If already open and clicking same bubble, maybe minimize?
-        // For now, just focus.
+        bringToFront(id);
     }
+}
 
-    // Clear and reload messages
-    chatMessages.innerHTML = '';
-    conversations[id].messages.forEach(msg => {
-        renderMessageToUI(msg.text, msg.sender);
-    });
-    chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
-
-    renderBubbles(); // Update active state
+function bringToFront(id) {
+    const conv = conversations[id];
+    if (!conv) return;
+    conv.zIndex = ++zIndexCounter;
+    const win = document.getElementById(`chat-window-${id}`);
+    if (win) win.style.zIndex = conv.zIndex;
 }
 
 function createNewConversation() {
     const newId = 'conv-' + Date.now();
+    // Cascade position
+    const offset = (Object.keys(conversations).length % 10) * 30;
+
     conversations[newId] = {
+        id: newId,
         messages: [{ text: 'Nueva conversación iniciada. ¿En qué puedo ayudarte?', sender: 'bot' }],
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        isOpen: true,
+        isMinimized: false,
+        x: 100 + offset,
+        y: 100 + offset,
+        zIndex: ++zIndexCounter
     };
-    openConversation(newId);
+
+    renderChatWindow(newId);
+    renderBubbles();
 }
 
-// if (newChatBtn) newChatBtn.addEventListener('click', createNewConversation); // This line is no longer needed as newChatBtn is dynamic
+// Main Factory Function
+function renderChatWindow(id) {
+    const conv = conversations[id];
+    if (!conv) return;
 
-// Mobile Minimize / Desktop Minimize Logic
-// Reuse the mobileMinimizeBtn for "Hide Window" across all views if desired, or just Mobile.
-// User said "Minimize shrinks it to a bubble in the dock".
-// const mobileMinimizeBtn = document.getElementById('mobileMinimizeBtn'); // This line is no longer needed
-// chatbotWindow already defined
+    // Check if already exists
+    let win = document.getElementById(`chat-window-${id}`);
+    if (!win) {
+        win = document.createElement('div');
+        win.id = `chat-window-${id}`;
+        win.className = 'chatbot-window';
+        win.style.position = 'fixed'; // Ensure fixed logic
 
-// Header Buttons Logic
-const chatbotMinimize = document.getElementById('chatbotMinimize');
-// chatbotClose, chatbotToggle already defined
+        // Use saved position
+        win.style.top = `${conv.x}px`;
+        win.style.left = `${conv.y}px`;
+        win.style.zIndex = conv.zIndex;
 
-if (chatbotMinimize) {
-    chatbotMinimize.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // Hide window, keep bubbles
-        chatbotWindow.classList.remove('open');
-        renderBubbles(); // Update active state (remove active class from bubble)
+        win.innerHTML = `
+            <div class="chat-header">
+                <div class="chat-title">
+                    <i data-lucide="bot"></i>
+                    <span>AletheIA</span>
+                </div>
+                <div class="header-actions">
+                    <button class="header-icon-btn minimize-btn" title="Minimizar"><i data-lucide="minus"></i></button>
+                    <button class="header-icon-btn close-btn" title="Cerrar"><i data-lucide="x"></i></button>
+                </div>
+            </div>
+            <div class="chat-messages">
+                <!-- Messages injected here -->
+            </div>
+            <div class="chat-input-area">
+                <input type="text" placeholder="Escribe un mensaje..." class="chat-input">
+                <button class="chat-send"><i data-lucide="send"></i></button>
+            </div>
+        `;
+
+        chatWindowsContainer.appendChild(win);
+
+        // Attach Events
+        attachWindowEvents(win, id);
+
+        // Create icons
+        if (window.lucide) lucide.createIcons();
+    }
+
+    // Ensure display
+    win.style.display = 'flex';
+    win.classList.remove('minimized');
+
+    // Render Messages
+    const messagesContainer = win.querySelector('.chat-messages');
+    messagesContainer.innerHTML = '';
+    conv.messages.forEach(msg => {
+        renderMessageToElement(messagesContainer, msg.text, msg.sender);
     });
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// Also handle Close button to completely remove conversation
-// Also handle Close button to completely remove conversation
-if (chatbotClose) {
-    chatbotClose.addEventListener('click', (e) => {
-        e.stopPropagation();
-
-        // Remove current conversation from memory
-        if (activeConversationId && conversations[activeConversationId]) {
-            delete conversations[activeConversationId];
-        }
-
-        const remainingIds = Object.keys(conversations);
-        if (remainingIds.length > 0) {
-            // Switch to the most recent one
-            // Sort by timestamp desc
-            const nextId = remainingIds.sort((a, b) => conversations[b].timestamp - conversations[a].timestamp)[0];
-            openConversation(nextId);
-        } else {
-            // No conversations left. Close window.
-            chatbotWindow.classList.remove('open');
-            activeConversationId = null;
-            // Maybe reset interface?
-            chatMessages.innerHTML = '<div class="message bot"><p>Has cerrado todas las conversaciones. Inicia una nueva (+).</p></div>';
-            renderBubbles();
-        }
-    });
-}
-
-
-// Toggle Button (Main) - Opens current or new
-if (chatbotToggle) {
-    chatbotToggle.addEventListener('click', () => {
-        if (chatbotWindow.classList.contains('open')) {
-            chatbotWindow.classList.remove('open');
-        } else {
-            openConversation(activeConversationId);
-        }
-        renderBubbles();
-    });
-}
-
-function renderMessageToUI(text, sender) {
+function renderMessageToElement(container, text, sender) {
     const div = document.createElement('div');
     div.classList.add('message', sender);
-
     if (sender === 'bot') {
         div.innerHTML = parseMarkdown(text);
     } else {
         div.innerHTML = `<p>${text}</p>`;
     }
-    chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    container.appendChild(div);
 }
 
-function addMessage(text, sender) {
-    // Store in memory
-    if (!conversations[activeConversationId]) {
-        conversations[activeConversationId] = { messages: [], timestamp: Date.now() };
-    }
-    conversations[activeConversationId].messages.push({ text, sender });
-    conversations[activeConversationId].timestamp = Date.now(); // Update timestamp for sorting
+function attachWindowEvents(win, id) {
+    const header = win.querySelector('.chat-header');
+    const minBtn = win.querySelector('.minimize-btn');
+    const closeBtn = win.querySelector('.close-btn');
+    const input = win.querySelector('.chat-input');
+    const sendBtn = win.querySelector('.chat-send');
+    const msgsContainer = win.querySelector('.chat-messages');
 
-    renderMessageToUI(text, sender);
-    renderBubbles(); // Re-sort bubbles
-}
+    // 1. Dragging
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
 
-// Update handleSend to use activeConversationId (which is effectively the backend conversation_id for now?)
-// Note: The backend returns a specific conversation_id. We might need to map our frontend ID to backend ID 
-// OR just use the backend ID if we want persistence. 
-// For now, let's keep frontend ID separate or update it.
-// Actually, let's store backendId inside the conversation object.
+    header.onmousedown = (e) => {
+        // Bring to front on click
+        bringToFront(id);
 
-async function handleSend() {
-    const txt = chatInput.value.trim();
-    if (!txt) return;
+        if (e.target.closest('button')) return; // Ignore buttons
 
-    addMessage(txt, 'user');
-    chatInput.value = '';
-
-    // Add loading indicator
-    const loadingId = 'loading-' + Date.now();
-    const loadingDiv = document.createElement('div');
-    loadingDiv.id = loadingId;
-    loadingDiv.classList.add('message', 'bot');
-    loadingDiv.innerHTML = '<p>...</p>';
-    chatMessages.appendChild(loadingDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-    // Get backend ID for this conversation
-    let backendId = conversations[activeConversationId].backendId || null;
-
-    try {
-        const res = await fetch('/api/chat-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: txt,
-                conversation_id: backendId
-            })
-        });
-
-        // Remove loading
-        const loader = document.getElementById(loadingId);
-        if (loader) loader.remove();
-
-        if (!res.ok) {
-            throw new Error(`Server status: ${res.status}`);
-        }
-
-        const data = await res.json();
-
-        if (data.error) {
-            addMessage(`Error: ${data.error}`, 'bot');
-        } else {
-            // Save backend conversation ID to current conversation
-            if (data.conversation_id) {
-                conversations[activeConversationId].backendId = data.conversation_id;
-            }
-            addMessage(data.response, 'bot');
-        }
-    } catch (e) {
-        // Remove loading
-        const loader = document.getElementById(loadingId);
-        if (loader) loader.remove();
-
-        console.error('Chat Error:', e);
-        addMessage('Lo siento, el servicio de asistente no está disponible en este momento.', 'bot');
-    }
-}
-if (chatSend) chatSend.addEventListener('click', handleSend);
-if (chatInput) chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleSend(); });
-
-// Make Chatbot Draggable
-const chatHeader = document.querySelector('.chat-header');
-let isDragging = false;
-let currentX;
-let currentY;
-let initialX;
-let initialY;
-let xOffset = 0;
-let yOffset = 0;
-
-if (chatHeader && chatbotWindow) {
-    chatHeader.addEventListener('mousedown', dragStart);
-    document.addEventListener('mouseup', dragEnd);
-    document.addEventListener('mousemove', drag);
-
-    function dragStart(e) {
-        initialX = e.clientX - xOffset;
-        initialY = e.clientY - yOffset;
-
-        if (e.target === chatHeader || e.target.parentNode === chatHeader) {
-            isDragging = true;
-        }
-    }
-
-    function dragEnd(e) {
-        initialX = currentX;
-        initialY = currentY;
-        isDragging = false;
-    }
-
-    function drag(e) {
-        if (isDragging) {
-            e.preventDefault();
-            currentX = e.clientX - initialX;
-            currentY = e.clientY - initialY;
-
-            xOffset = currentX;
-            yOffset = currentY;
-
-            setTranslate(currentX, currentY, chatbotWindow);
-        }
-    }
-
-    function setTranslate(xPos, yPos, el) {
-        // Use translate3d for better performance
-        // el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
-        // NOTE: blending with scale(1) from .open class might be tricky if we use transform here.
-        // Better to use top/left or right/bottom for a fixed element.
-
-        // Let's use computed style to get current position if we weren't using offset.
-        // Actually, since it's fixed, we can just update top/left.
-        // But our CSS uses bottom/right.
-
-        // Simpler approach for Fixed positioning:
-        // Adjust right/bottom styles directly? NO, simpler to use transform if we can preserve scale.
-        // OR simply change top/left directly and unset bottom/right on first drag.
-    }
-}
-
-// Reimplements simpler drag for fixed element
-(function () {
-    const header = document.querySelector('.chat-header');
-    const win = document.getElementById('chatbotWindow');
-
-    if (!header || !win) return;
-
-    let isDown = false;
-    let offset = [0, 0];
-
-    header.addEventListener('mousedown', function (e) {
-        isDown = true;
-        offset = [
-            win.offsetLeft - e.clientX,
-            win.offsetTop - e.clientY
-        ];
-        // Ensure we switch to left/top positioning instead of right/bottom
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
         const rect = win.getBoundingClientRect();
-        win.style.right = 'auto';
-        win.style.bottom = 'auto';
-        win.style.left = rect.left + 'px';
-        win.style.top = rect.top + 'px';
-        win.style.margin = '0';
-    }, true);
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
 
-    document.addEventListener('mouseup', function () {
-        isDown = false;
-    }, true);
+    function onMouseMove(e) {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        win.style.left = `${initialLeft + dx}px`;
+        win.style.top = `${initialTop + dy}px`;
+    }
 
-    document.addEventListener('mousemove', function (e) {
-        e.preventDefault();
-        if (isDown) {
-            win.style.left = (e.clientX + offset[0]) + 'px';
-            win.style.top = (e.clientY + offset[1]) + 'px';
+    function onMouseUp() {
+        if (isDragging) {
+            // Save position
+            const rect = win.getBoundingClientRect();
+            if (conversations[id]) {
+                conversations[id].x = rect.top; // NOTE: Storing Top as X in previous logic, let's enable consistency
+                conversations[id].y = rect.left;
+            }
         }
-    }, true);
-})();
+        isDragging = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+    }
+
+    // 2. Buttons
+    minBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleConversationWindow(id); // Will minimize
+    };
+
+    closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        // Remove
+        delete conversations[id];
+        win.remove();
+        renderBubbles();
+    };
+
+    // 3. Interactions (Focus)
+    win.onmousedown = () => bringToFront(id);
+
+    // 4. Chat Logic
+    const sendMessage = async () => {
+        const txt = input.value.trim();
+        if (!txt) return;
+
+        // Add User Message
+        addMessageToConversation(id, txt, 'user');
+        input.value = '';
+
+        // Add Loading
+        const loadingDiv = document.createElement('div');
+        loadingDiv.classList.add('message', 'bot');
+        loadingDiv.innerHTML = '<p>...</p>';
+        msgsContainer.appendChild(loadingDiv);
+        msgsContainer.scrollTop = msgsContainer.scrollHeight;
+
+        // API Call
+        try {
+            const backendId = conversations[id]?.backendId || null;
+            const res = await fetch('/api/chat-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: txt, conversation_id: backendId })
+            });
+
+            loadingDiv.remove();
+
+            if (!res.ok) throw new Error(`Status: ${res.status}`);
+            const data = await res.json();
+
+            if (data.error) {
+                addMessageToConversation(id, `Error: ${data.error}`, 'bot');
+            } else {
+                if (data.conversation_id && conversations[id]) {
+                    conversations[id].backendId = data.conversation_id;
+                }
+                addMessageToConversation(id, data.response, 'bot');
+            }
+        } catch (e) {
+            loadingDiv.remove();
+            addMessageToConversation(id, 'Error de conexión.', 'bot');
+        }
+    };
+
+    sendBtn.onclick = sendMessage;
+    input.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+}
+
+function addMessageToConversation(id, text, sender) {
+    const conv = conversations[id];
+    if (!conv) return;
+
+    conv.messages.push({ text, sender });
+    conv.timestamp = Date.now();
+
+    // Update active window if open
+    const win = document.getElementById(`chat-window-${id}`);
+    if (win) {
+        const container = win.querySelector('.chat-messages');
+        renderMessageToElement(container, text, sender);
+        container.scrollTop = container.scrollHeight;
+    }
+    renderBubbles();
+}
+
+// Global Toggle Button
+if (chatbotToggle) {
+    chatbotToggle.addEventListener('click', () => {
+        // Toggle the most recent conversation or create new
+        const ids = Object.keys(conversations);
+        if (ids.length === 0) {
+            createNewConversation();
+        } else {
+            // Find most recent
+            const recentId = ids.sort((a, b) => conversations[b].timestamp - conversations[a].timestamp)[0];
+            toggleConversationWindow(recentId);
+        }
+    });
+}
+// Initial Render
+// Optionally open the init conversation?
+// toggleConversationWindow(initId); // Let's keep it closed by default or open?
+renderBubbles();
 
 // View Switching Logic
 const viewGlobeBtn = document.getElementById('viewGlobe');
@@ -1476,11 +1494,13 @@ function updatePrismaGeometry() {
 
     // Calculate Apothem (distance from center to face) for equilateral triangle
     // r = width / (2 * tan(60)) = width / 3.464
-    let r = Math.round(width / 3.464);
+    // User Feedback: "Shipping entre caras" -> Gaps.
+    // FIX: Reduce radius slightly (0.9 factor) to bring faces closer and ensure corners touch/overlap.
+    let r = Math.round((width / 3.464) * 0.9);
 
     // FAILSAFE: Ensure radius is never 0 or too small (default to ~90px for safe mobile 3D)
     // If r is too small, the faces will collapse onto each other.
-    if (r < 90) r = 90;
+    if (r < 80) r = 80;
 
     prismaRadius = r;
 

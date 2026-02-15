@@ -573,7 +573,8 @@ body {
     bottom: 100px;
     /* Above the toggle button */
     right: 20px;
-    z-index: 2000;
+    z-index: 10001;
+    /* Force above everything (window is 2001) */
     display: flex;
     flex-direction: column-reverse;
     /* Newest at bottom near toggle? Or top? Let's say stack up. */
@@ -584,7 +585,8 @@ body {
 }
 
 /* Conversations List / Bubbles */
-.conversation-bubble {
+.conversation-bubble,
+.new-chat-bubble {
     width: 50px;
     height: 50px;
     border-radius: 50%;
@@ -601,6 +603,18 @@ body {
     pointer-events: auto;
     /* Re-enable clicks */
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.new-chat-bubble {
+    color: var(--text-secondary);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.new-chat-bubble:hover {
+    color: var(--accent-color);
+    background: var(--panel-bg);
+    transform: scale(1.1);
+    border-color: var(--accent-color);
 }
 
 .conversation-bubble:hover {
@@ -624,11 +638,11 @@ body {
 .chatbot-window {
     position: fixed;
     /* Fixed to viewport for dragging */
-    bottom: 90px;
-    /* Initial position near toggle */
-    right: 80px;
-    /* Moved left to avoid overlapping dock/toggle? Or just float freely. */
-    /* Let's set initial position. Logic will open it. */
+    /* Fixed to viewport for dragging */
+    /* Initial position will be set by JS usually, but keep a default just in case */
+    top: 100px;
+    left: 100px;
+    /* Remove fixed bottom/right to allow free movement */
 
     width: 400px;
     height: 600px;
@@ -741,16 +755,34 @@ body {
 
     /* Safe area for bottom (iPhone home bar, browser nav) */
     .chatbot-container {
-        bottom: calc(80px + env(safe-area-inset-bottom));
-        /* Moved up significantly */
+        bottom: calc(85px + env(safe-area-inset-bottom));
+        /* Toggle position */
         right: 20px;
     }
 
     .bubbles-dock {
-        bottom: calc(160px + env(safe-area-inset-bottom));
-        /* Moved up above toggle */
+        /* User said it was "too high". Previous was 160px.
+           Let's lower it. The toggle is roughly 60px height + 15px bottom = ~75px space.
+           So dock should start around 90-100px.
+        */
+        bottom: calc(100px + env(safe-area-inset-bottom));
         right: 20px;
-        gap: 15px;
+        gap: 12px;
+        z-index: 10001 !important;
+        /* Force above window (9999) */
+        pointer-events: none;
+        /* Container passes clicks */
+    }
+
+    .conversation-bubble,
+    .new-chat-bubble {
+        pointer-events: auto !important;
+        /* Children capture clicks */
+        width: 55px;
+        /* Larger bubbles */
+        height: 55px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        /* Stronger shadow */
     }
 
     .chatbot-window {

@@ -348,31 +348,8 @@
             <i data-lucide="message-circle"></i>
         </button>
 
-        <div class="chatbot-window" id="chatbotWindow">
-            <div class="chat-header">
-                <div class="chat-title">
-                    <i data-lucide="bot"></i>
-                    <span>AletheIA</span>
-                </div>
-                <div class="header-actions">
-                    <!-- New Chat moved to dock -->
-                    <button id="chatbotMinimize" class="header-icon-btn" title="Minimizar"><i
-                            data-lucide="minus"></i></button>
-                    <!-- Close button -->
-                    <button id="chatbotClose" class="header-icon-btn" title="Cerrar"><i data-lucide="x"></i></button>
-                </div>
-            </div>
-            <div class="chat-messages" id="chatMessages">
-                <div class="message bot">
-                    <p>Hola. Soy AletheIA, tu asistente de inteligencia de fuentes abiertas. ¿En qué puedo ayudarte?
-                    </p>
-                </div>
-            </div>
-            <div class="chat-input-area">
-                <input type="text" id="chatInput" placeholder="Escribe un mensaje...">
-                <button id="chatSend"><i data-lucide="send"></i></button>
-            </div>
-        </div>
+        <!-- Dynamic Chat Windows Container -->
+        <div id="chatWindowsContainer"></div>
     </div>
 
     <script src="./desktop-engine.js"></script>
