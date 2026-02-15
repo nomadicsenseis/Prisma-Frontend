@@ -567,16 +567,71 @@ body {
     background: var(--accent-hover);
 }
 
-/* Chatbot Window - Independent Floating Element */
+/* Bubbles Dock (Floating outside window) */
+.bubbles-dock {
+    position: fixed;
+    bottom: 100px;
+    /* Above the toggle button */
+    right: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column-reverse;
+    /* Newest at bottom near toggle? Or top? Let's say stack up. */
+    gap: 10px;
+    align-items: center;
+    pointer-events: none;
+    /* Let clicks pass through empty space */
+}
+
+/* Conversations List / Bubbles */
+.conversation-bubble {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--panel-bg);
+    /* Use panel bg to stand out? */
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    pointer-events: auto;
+    /* Re-enable clicks */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.conversation-bubble:hover {
+    transform: scale(1.1);
+    border-color: var(--accent-color);
+}
+
+.conversation-bubble.active {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: var(--text-inverted);
+}
+
+.conversation-bubble .bubble-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Chatbot Window - No longer has sidebar */
 .chatbot-window {
     position: fixed;
     /* Fixed to viewport for dragging */
     bottom: 90px;
     /* Initial position near toggle */
-    right: 20px;
-    /* Initial position near toggle */
-    width: 350px;
-    height: 500px;
+    right: 80px;
+    /* Moved left to avoid overlapping dock/toggle? Or just float freely. */
+    /* Let's set initial position. Logic will open it. */
+
+    width: 400px;
+    height: 600px;
     background: var(--panel-bg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -584,10 +639,15 @@ body {
     border-radius: 16px;
     display: flex;
     flex-direction: column;
+    /* Back to column */
     overflow: hidden;
     z-index: 2001;
-    /* Higher than toggle */
     transition: opacity 0.3s ease, transform 0.3s ease;
+    resize: both;
+    min-width: 320px;
+    min-height: 400px;
+    max-width: 90vw;
+    max-height: 90vh;
 
     /* Hidden state */
     opacity: 0;
@@ -599,6 +659,187 @@ body {
     opacity: 1;
     pointer-events: auto;
     transform: scale(1);
+}
+
+/* Hide sidebar classes if they exist */
+.chat-sidebar {
+    display: none;
+}
+
+
+/* Main Area */
+.chat-main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    /* Prevent flex overflow */
+}
+
+.chat-header {
+    padding: 15px;
+    background: var(--accent-subtle);
+    border-bottom: 1px solid var(--panel-border);
+    cursor: move;
+    /* Indicates draggable */
+    user-select: none;
+    /* Prevent text selection while dragging */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px;
+    /* Fixed height for header */
+}
+
+/* Header Actions */
+.header-actions {
+    display: flex;
+    gap: 8px;
+    /* Slightly tighter gap */
+}
+
+/* Unified Header Button Style */
+.header-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    /* Slight rounding, or 50% for circle? User liked X style. */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.header-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.header-icon-btn:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.chatbot-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 5px;
+}
+
+.chatbot-close-btn:hover {
+    color: var(--alert-color);
+}
+
+/* Mobile Full Screen Styles */
+@media (max-width: 768px) {
+
+    /* Safe area for bottom (iPhone home bar, browser nav) */
+    .chatbot-container {
+        bottom: calc(80px + env(safe-area-inset-bottom));
+        /* Moved up significantly */
+        right: 20px;
+    }
+
+    .bubbles-dock {
+        bottom: calc(160px + env(safe-area-inset-bottom));
+        /* Moved up above toggle */
+        right: 20px;
+        gap: 15px;
+    }
+
+    .chatbot-window {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 0;
+        resize: none;
+        bottom: auto;
+        right: auto;
+        transform: none !important;
+        z-index: 9999;
+        /* Ensure on top of everything including dock */
+        padding-top: env(safe-area-inset-top);
+        /* Avoid notch/status bar */
+    }
+
+    .chat-header {
+        cursor: default;
+        /* No dragging on mobile */
+        padding: 10px 15px;
+        /* Comfier padding */
+        height: auto;
+        /* Let it grow if needed */
+        min-height: 60px;
+    }
+
+    /* Larger touch targets for header buttons */
+    .header-icon-btn {
+        width: 48px;
+        height: 48px;
+        background: rgba(255, 255, 255, 0.05);
+        /* Slight bg to see touch area */
+    }
+
+    /* Adjust Dock Position for Mobile */
+    /* This rule is now superseded by the one above for .bubbles-dock */
+
+    .conversation-bubble,
+    .new-chat-bubble {
+        width: 55px;
+        /* Larger bubbles */
+        height: 55px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        /* Stronger shadow */
+    }
+
+    /* Ensure toggle is visible and reachable */
+    .chatbot-toggle {
+        width: 60px;
+        /* Larger toggle */
+        height: 60px;
+        /* Position is relative to container now? No, container has absolute/fixed?
+           Check .chatbot-container definition. It says absolute bottom 20 right 20.
+           In mobile media query we just overrode .chatbot-container bottom.
+           .chatbot-toggle is inside it.
+        */
+    }
+
+    .chatbot-window.minimized {
+        width: 60px !important;
+        height: 60px !important;
+        top: auto !important;
+        left: auto !important;
+        bottom: 20px !important;
+        right: 20px !important;
+        border-radius: 50% !important;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--accent-color);
+        box-shadow: 0 4px 15px var(--accent-glow);
+        transform: scale(1) !important;
+        /* Override drag scale */
+        cursor: pointer;
+    }
+
+    /* Minimized state styles removed */
+
+    .mobile-minimize-btn {
+        display: flex;
+    }
+
+    /* The original .chat-header rule was here, but it's now replaced/modified above */
 }
 
 .chat-header {

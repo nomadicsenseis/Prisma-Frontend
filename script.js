@@ -819,13 +819,159 @@ function parseMarkdown(text) {
     return html;
 }
 
-function addMessage(text, sender) {
+// --- Chatbot & Bubbles Logic ---
+let conversations = {};
+let activeConversationId = 'init';
+
+// Initialize default conversation
+conversations['init'] = {
+    messages: [{ text: 'Hola. Soy AletheIA, tu asistente de inteligencia de fuentes abiertas. ¿En qué puedo ayudarte?', sender: 'bot' }],
+    timestamp: Date.now()
+};
+
+const bubblesDock = document.getElementById('bubblesDock');
+// newChatBtn - removed from HTML, we will create it dynamically in dock or look for it?
+// Actually, let's just create it in the render loop.
+
+function renderBubbles() {
+    if (!bubblesDock) return;
+    bubblesDock.innerHTML = '';
+
+    // 1. Render Active Conversations
+    const sortedIds = Object.keys(conversations).sort((a, b) => conversations[a].timestamp - conversations[b].timestamp);
+
+    sortedIds.forEach(id => {
+        const bubble = document.createElement('div');
+        bubble.classList.add('conversation-bubble');
+        if (id === activeConversationId && chatbotWindow.classList.contains('open')) {
+            bubble.classList.add('active');
+        }
+
+        // Avatar icon
+        bubble.innerHTML = '<div class="bubble-avatar"><i data-lucide="message-square"></i></div>';
+
+        // Interactions
+        bubble.onclick = (e) => {
+            e.stopPropagation();
+            openConversation(id);
+        };
+
+        bubblesDock.appendChild(bubble);
+    });
+
+    // 2. Render "New Chat" Bubble (Always at top if column-reverse, so append last)
+    const newBubble = document.createElement('div');
+    newBubble.classList.add('new-chat-bubble');
+    newBubble.title = "Nueva Conversación";
+    newBubble.innerHTML = '<i data-lucide="plus"></i>';
+    newBubble.onclick = (e) => {
+        e.stopPropagation();
+        createNewConversation();
+    };
+    bubblesDock.appendChild(newBubble);
+
+    lucide.createIcons();
+}
+
+function openConversation(id) {
+    activeConversationId = id;
+
+    // Open window if closed
+    if (!chatbotWindow.classList.contains('open')) {
+        chatbotWindow.classList.add('open');
+        chatbotWindow.classList.remove('minimized'); // Ensure not minimized
+    } else {
+        // If already open and clicking same bubble, maybe minimize?
+        // For now, just focus.
+    }
+
+    // Clear and reload messages
+    chatMessages.innerHTML = '';
+    conversations[id].messages.forEach(msg => {
+        renderMessageToUI(msg.text, msg.sender);
+    });
+    chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
+
+    renderBubbles(); // Update active state
+}
+
+function createNewConversation() {
+    const newId = 'conv-' + Date.now();
+    conversations[newId] = {
+        messages: [{ text: 'Nueva conversación iniciada. ¿En qué puedo ayudarte?', sender: 'bot' }],
+        timestamp: Date.now()
+    };
+    openConversation(newId);
+}
+
+// if (newChatBtn) newChatBtn.addEventListener('click', createNewConversation); // This line is no longer needed as newChatBtn is dynamic
+
+// Mobile Minimize / Desktop Minimize Logic
+// Reuse the mobileMinimizeBtn for "Hide Window" across all views if desired, or just Mobile.
+// User said "Minimize shrinks it to a bubble in the dock".
+// const mobileMinimizeBtn = document.getElementById('mobileMinimizeBtn'); // This line is no longer needed
+// chatbotWindow already defined
+
+// Header Buttons Logic
+const chatbotMinimize = document.getElementById('chatbotMinimize');
+// chatbotClose, chatbotToggle already defined
+
+if (chatbotMinimize) {
+    chatbotMinimize.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Hide window, keep bubbles
+        chatbotWindow.classList.remove('open');
+        renderBubbles(); // Update active state (remove active class from bubble)
+    });
+}
+
+// Also handle Close button to completely remove conversation
+// Also handle Close button to completely remove conversation
+if (chatbotClose) {
+    chatbotClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+
+        // Remove current conversation from memory
+        if (activeConversationId && conversations[activeConversationId]) {
+            delete conversations[activeConversationId];
+        }
+
+        const remainingIds = Object.keys(conversations);
+        if (remainingIds.length > 0) {
+            // Switch to the most recent one
+            // Sort by timestamp desc
+            const nextId = remainingIds.sort((a, b) => conversations[b].timestamp - conversations[a].timestamp)[0];
+            openConversation(nextId);
+        } else {
+            // No conversations left. Close window.
+            chatbotWindow.classList.remove('open');
+            activeConversationId = null;
+            // Maybe reset interface?
+            chatMessages.innerHTML = '<div class="message bot"><p>Has cerrado todas las conversaciones. Inicia una nueva (+).</p></div>';
+            renderBubbles();
+        }
+    });
+}
+
+
+// Toggle Button (Main) - Opens current or new
+if (chatbotToggle) {
+    chatbotToggle.addEventListener('click', () => {
+        if (chatbotWindow.classList.contains('open')) {
+            chatbotWindow.classList.remove('open');
+        } else {
+            openConversation(activeConversationId);
+        }
+        renderBubbles();
+    });
+}
+
+function renderMessageToUI(text, sender) {
     const div = document.createElement('div');
     div.classList.add('message', sender);
 
     if (sender === 'bot') {
-        const formatted = parseMarkdown(text);
-        div.innerHTML = formatted; // Removed <p> wrapper to allow block elements like <h3>
+        div.innerHTML = parseMarkdown(text);
     } else {
         div.innerHTML = `<p>${text}</p>`;
     }
@@ -833,7 +979,23 @@ function addMessage(text, sender) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-let currentConversationId = null;
+function addMessage(text, sender) {
+    // Store in memory
+    if (!conversations[activeConversationId]) {
+        conversations[activeConversationId] = { messages: [], timestamp: Date.now() };
+    }
+    conversations[activeConversationId].messages.push({ text, sender });
+    conversations[activeConversationId].timestamp = Date.now(); // Update timestamp for sorting
+
+    renderMessageToUI(text, sender);
+    renderBubbles(); // Re-sort bubbles
+}
+
+// Update handleSend to use activeConversationId (which is effectively the backend conversation_id for now?)
+// Note: The backend returns a specific conversation_id. We might need to map our frontend ID to backend ID 
+// OR just use the backend ID if we want persistence. 
+// For now, let's keep frontend ID separate or update it.
+// Actually, let's store backendId inside the conversation object.
 
 async function handleSend() {
     const txt = chatInput.value.trim();
@@ -851,13 +1013,16 @@ async function handleSend() {
     chatMessages.appendChild(loadingDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
+    // Get backend ID for this conversation
+    let backendId = conversations[activeConversationId].backendId || null;
+
     try {
         const res = await fetch('/api/chat-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: txt,
-                conversation_id: currentConversationId
+                conversation_id: backendId
             })
         });
 
@@ -874,9 +1039,9 @@ async function handleSend() {
         if (data.error) {
             addMessage(`Error: ${data.error}`, 'bot');
         } else {
-            // Save conversation ID for context
+            // Save backend conversation ID to current conversation
             if (data.conversation_id) {
-                currentConversationId = data.conversation_id;
+                conversations[activeConversationId].backendId = data.conversation_id;
             }
             addMessage(data.response, 'bot');
         }
