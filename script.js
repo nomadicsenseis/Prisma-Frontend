@@ -822,14 +822,20 @@ const bubblesDock = document.getElementById('bubblesDock');
 
 // Initialize default conversation
 const initId = 'conv-init';
+// Initial Pos for first window
+let initTop = window.innerHeight - 600 - 120;
+let initLeft = window.innerWidth - 400 - 80;
+if (initTop < 20) initTop = 20;
+if (initLeft < 20) initLeft = 20;
+
 conversations[initId] = {
     id: initId,
     messages: [{ text: 'Hola. Soy AletheIA, tu asistente de inteligencia de fuentes abiertas. ¿En qué puedo ayudarte?', sender: 'bot' }],
     timestamp: Date.now(),
     isOpen: false, // Start closed
     isMinimized: false,
-    x: 100,
-    y: 100,
+    x: initTop,
+    y: initLeft,
     zIndex: zIndexCounter++
 };
 
@@ -892,6 +898,7 @@ function toggleConversationWindow(id) {
             else {
                 win.classList.remove('minimized');
                 win.style.display = 'flex';
+                setTimeout(() => win.classList.add('open'), 10);
                 // Update z-index
                 win.style.zIndex = conv.zIndex;
             }
@@ -899,7 +906,10 @@ function toggleConversationWindow(id) {
             // Minimize (hide window, keep bubble)
             conv.isMinimized = true;
             const win = document.getElementById(`chat-window-${id}`);
-            if (win) win.style.display = 'none';
+            if (win) {
+                win.classList.remove('open');
+                setTimeout(() => win.style.display = 'none', 300);
+            }
         }
     } else {
         // Open
@@ -932,8 +942,20 @@ function bringToFront(id) {
 
 function createNewConversation() {
     const newId = 'conv-' + Date.now();
-    // Cascade position
-    const offset = (Object.keys(conversations).length % 10) * 30;
+    // Cascade position: Start bottom-right and cascade up/left
+    // Window size is approx 400x600.
+    const count = Object.keys(conversations).length;
+    const offset = (count % 10) * 20; // 20px cascade
+
+    // Base position (Bottom-Right)
+    // Top: Viewport Height - Window Height (600) - Margin (120) - Offset
+    let startTop = window.innerHeight - 600 - 120 - offset;
+    // Left: Viewport Width - Window Width (400) - Margin (80) - Offset
+    let startLeft = window.innerWidth - 400 - 80 - offset;
+
+    // Safety bounds
+    if (startTop < 20) startTop = 20;
+    if (startLeft < 20) startLeft = 20;
 
     conversations[newId] = {
         id: newId,
@@ -941,8 +963,8 @@ function createNewConversation() {
         timestamp: Date.now(),
         isOpen: true,
         isMinimized: false,
-        x: 100 + offset,
-        y: 100 + offset,
+        x: startTop,
+        y: startLeft,
         zIndex: ++zIndexCounter
     };
 
@@ -1000,6 +1022,7 @@ function renderChatWindow(id) {
     // Ensure display
     win.style.display = 'flex';
     win.classList.remove('minimized');
+    setTimeout(() => win.classList.add('open'), 10); // Slight delay for transition effect
 
     // Render Messages
     const messagesContainer = win.querySelector('.chat-messages');
@@ -1081,7 +1104,8 @@ function attachWindowEvents(win, id) {
         e.stopPropagation();
         // Remove
         delete conversations[id];
-        win.remove();
+        win.classList.remove('open');
+        setTimeout(() => win.remove(), 300); // Wait for transition
         renderBubbles();
     };
 
@@ -1089,46 +1113,126 @@ function attachWindowEvents(win, id) {
     win.onmousedown = () => bringToFront(id);
 
     // 4. Chat Logic
+    let isSending = false;
+
+    const resilientFetch = async (url, options, retries = 3, delay = 1000) => {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response;
+            } catch (err) {
+                if (i === retries - 1) throw err;
+
+                console.warn(`Fetch attempt ${i + 1} failed.`, err);
+
+                // MOBILITY FIX: If hidden (locked), wait for visibility before retrying
+                if (document.visibilityState === 'hidden') {
+                    console.log('📱 App hidden during fetch failure. Waiting for visibility to retry...');
+                    await new Promise(resolve => {
+                        const onVisible = () => {
+                            if (document.visibilityState === 'visible') {
+                                document.removeEventListener('visibilitychange', onVisible);
+                                resolve();
+                            }
+                        };
+                        document.addEventListener('visibilitychange', onVisible);
+                    });
+                    console.log('📱 App visible again. Resuming retry logic.');
+                    // Reset delay or keep it? Let's reset slightly to give 500ms for network recovery
+                    await new Promise(res => setTimeout(res, 500));
+                } else {
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2; // Exponential backoff
+                }
+            }
+        }
+    };
+
     const sendMessage = async () => {
+        if (isSending) return; // Prevent multiple concurrent sends
+
         const txt = input.value.trim();
         if (!txt) return;
+
+        // DEDUPLICATION: Ignore identical messages within 3 seconds (helps with mobile OS replays)
+        const now = Date.now();
+        const conv = conversations[id];
+        if (conv && conv.lastSentText === txt && (now - conv.lastSentTime < 3000)) {
+            console.warn(`💬 Chat [${id}]: Prevented duplicate send of "${txt}"`);
+            input.value = ''; // Just clear it
+            return;
+        }
+        if (conv) {
+            conv.lastSentText = txt;
+            conv.lastSentTime = now;
+        }
+
+        isSending = true;
+        input.disabled = true;
+        sendBtn.disabled = true;
 
         // Add User Message
         addMessageToConversation(id, txt, 'user');
         input.value = '';
 
-        // Add Loading
         const loadingDiv = document.createElement('div');
-        loadingDiv.classList.add('message', 'bot');
-        loadingDiv.innerHTML = '<p>...</p>';
+        loadingDiv.classList.add('message', 'bot', 'loading-message');
+        loadingDiv.innerHTML = '<p class="loading-dots"></p>';
         msgsContainer.appendChild(loadingDiv);
         msgsContainer.scrollTop = msgsContainer.scrollHeight;
+
+        console.log(`💬 Chat [${id}]: Sending message: "${txt}"`);
 
         // API Call
         try {
             const backendId = conversations[id]?.backendId || null;
-            const res = await fetch('/api/chat-proxy', {
+
+            // Use resilientFetch instead of raw fetch
+            const res = await resilientFetch('/api/chat-proxy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: txt, conversation_id: backendId })
-            });
+            }, 3, 1500);
+
+            // FINAL VISIBILITY SYNC: If we arrived here but app is hidden (just resumed), 
+            // give it a tiny moment to stabilize before processing the stream
+            if (document.visibilityState === 'hidden') {
+                await new Promise(resolve => {
+                    const onVisible = () => {
+                        if (document.visibilityState === 'visible') {
+                            document.removeEventListener('visibilitychange', onVisible);
+                            resolve();
+                        }
+                    };
+                    document.addEventListener('visibilitychange', onVisible);
+                });
+                await new Promise(res => setTimeout(res, 300));
+            }
 
             loadingDiv.remove();
-
-            if (!res.ok) throw new Error(`Status: ${res.status}`);
             const data = await res.json();
+            console.log(`💬 Chat [${id}]: Received response:`, data);
 
             if (data.error) {
+                console.error(`💬 Chat [${id}]: Error from backend:`, data.error);
                 addMessageToConversation(id, `Error: ${data.error}`, 'bot');
             } else {
                 if (data.conversation_id && conversations[id]) {
                     conversations[id].backendId = data.conversation_id;
                 }
-                addMessageToConversation(id, data.response, 'bot');
+                const botResponse = data.response || "No recibí una respuesta clara.";
+                addMessageToConversation(id, botResponse, 'bot');
             }
         } catch (e) {
             loadingDiv.remove();
-            addMessageToConversation(id, 'Error de conexión.', 'bot');
+            console.error(`💬 Chat [${id}]: Final chat error after retries:`, e);
+            addMessageToConversation(id, 'Error de conexión persistente. Por favor, revisa tu conexión e inténtalo de nuevo.', 'bot');
+        } finally {
+            isSending = false;
+            input.disabled = false;
+            sendBtn.disabled = false;
+            input.focus();
         }
     };
 
@@ -3705,3 +3809,16 @@ document.addEventListener('DOMContentLoaded', () => {
 if (document.readyState !== 'loading') {
     initTheme();
 }
+
+// =========================================
+// MOBILE CONNECTIVITY & VISIBILITY HELPERS
+// =========================================
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        console.log('📱 App resumed: Checking connectivity...');
+        // Proactively refresh critical data if needed, or just log
+        // (The retry logic in fetch handles the chatbot part)
+    } else {
+        console.log('📱 App backgrounded/locked');
+    }
+});
